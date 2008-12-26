@@ -1,0 +1,328 @@
+#!/usr/bin/env python
+
+""" LICENSE
+
+Copyright Command Prompt, Inc.
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose, without fee, and without a written agreement
+is hereby granted, provided that the above copyright notice and this
+paragraph and the following two paragraphs appear in all copies.
+
+IN NO EVENT SHALL THE COMMAND PROMPT, INC. BE LIABLE TO ANY PARTY FOR
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING
+LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION,
+EVEN IF THE COMMAND PROMPT, INC. HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+THE COMMAND PROMPT, INC. SPECIFICALLY DISCLAIMS ANY WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN
+"AS IS" BASIS, AND THE COMMAND PROMPT, INC. HAS NO OBLIGATIONS TO
+PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+"""
+
+# $Id$
+
+import os
+import sys
+import re
+
+from ConfigParser import *
+from os import *
+from sys import *
+from optparse import OptionParser
+
+# Initiate command line switches
+
+usage = "usage: %prog [options] arg1 arg2"
+parser = OptionParser(usage=usage)
+
+parser.add_option("-F", "--file", dest="archivefilename", action="store", help="Archive file", metavar="FILE")
+parser.add_option("-C", "--config", dest="configfilename", action="store",  help="the name of the archiver config file", metavar="FILE")
+parser.add_option("-f", "--flush", dest="flush", action="store_true", help="Flush all remaining archives to slave")
+parser.add_option("-I", "--init", dest="init", action="store_true", help="Initialize master environment")
+
+(options, args) = parser.parse_args()
+
+archivefile = options.archivefilename
+configfile = options.configfilename
+flush = options.flush
+init = options.init
+
+# initiate config parser 
+config = ConfigParser()
+config.read(configfile)
+
+# Set up our keys
+state = config.defaults()['state']
+rsync_bin = config.defaults()['rsync_bin']
+slaves = config.defaults()['slaves']
+user = config.defaults()['user']
+r_archivedir = config.defaults()['r_archivedir']
+l_archivedir = config.defaults()['l_archivedir']
+timeout = config.defaults()['timeout']
+notify_ok = config.defaults()['notify_ok']
+notify_warning = config.defaults()['notify_warning']
+notify_critical = config.defaults()['notify_critical']
+debug = config.defaults()['debug']
+pgdata = config.defaults()['pgdata']
+rsync_version = config.defaults()['rsync_version']
+
+"""
+If we are not online, exit immediately
+"""
+
+if state != 'online':
+   print "ARCHIVER: We are offline, queuing archives"
+   system("%s" % (str(notify_warning)))
+   exit(1)
+
+
+def generate_slave_list_func():
+   """ 
+   We now support multiple slaves (see the README) in order do that properly 
+   we have to break up the string and turn it into a list
+   """
+   
+   slaves = config.defaults()['slaves']
+   s = str(slaves)
+   s.replace("'","")
+   slaves = s.split(",")
+   if debug == 'on':
+      print "NOTICE: generate_slave_list_func()"
+      print "NOTICE: Your slaves are: " + str(slaves)
+   return slaves
+
+def init_env_func():
+   """
+   Initialize the local queues so we can check each directory for left
+   over files
+   """
+   if debug == 'on':
+      print "NOTICE: init_env_func()"
+   l_archivedir = config.defaults()['l_archivedir']
+   queues = generate_slave_list_func()
+   try:
+      for host in queues:
+         queue = l_archivedir + "/" + host
+         os.makedirs("%s" % (queue))
+   except OSError, e:
+      print "ERROR: Can not make queue directories"
+      print "EXCEPTION: %s" % (str(e))
+      exit(1);
+
+def check_config_func():  
+   """ 
+   Let's make sure that our directories and executables exist 
+   """
+   if debug == 'on':
+      print "NOTICE: check_config_func()"
+   pathvars = [rsync_bin,pgdata,configfile]
+   for element in pathvars:
+      try:
+         os.stat("%s" % (str(element)))
+      except OSError, e:
+         print "Config %s:  %s" % (str(element),str(e))
+         exit(1)
+
+def check_pgpid_func():
+   """
+   Checks to see if postgresql is running
+   """
+   if debug == 'on':
+      print "NOTICE: check_pgpid_func()"
+   pidfile = '%s/postmaster.pid' % (str(pgdata))
+   try:
+      check = os.stat(pidfile)
+      if check:
+         file = open(pidfile,'r')
+         line = int(file.readline())
+      sendsignal = os.kill(line,0)
+      return 0
+   except:
+      return 1
+
+
+def get_pgcontroldata_func():
+   """
+   get_pgcontroldata_func doesn't actually do anything yet. This is more
+   for archival purposes so we can remember the regex
+   """
+
+   try:
+      cmd = os.popen("%s %s" % (str(pgcontroldata),str(pgdata)))
+      #return cmd.readlines
+      for row in cmd:
+         match = re.search('^Prior checkpoint location: *.{1,}' , '%s' % (str(row)))
+         if match != None:
+            print match
+   except OSError, e:
+      print
+      print "EXCEPTION: %s" % (str(e))
+      exit(1)
+
+
+def flush_check_func():
+   """
+   Simple function to make sure we require input before flushing a system
+   """
+   if debug == 'on':
+      print "NOTICE: flush_check_func()"
+   print "\n\n"
+   print "Warning! Flushing all logs will cause your slave to exit"
+   print "Standby and start up. Please verify that this is exactly what you desire.\n\n"""
+
+   print "I wish to force my slave into production: No/Yes\n\n"
+
+   line = str(raw_input())
+   if line == "Yes":
+      print "Flushing all xlogs"
+   elif line == "No":
+      print "Exiting!"
+      exit(0)
+   else:
+      print "Your options are Yes and No"
+      exit(0)
+
+def list_queue_func():
+   """
+   We only want to process archives for queues that have files, so we check
+   and only return a queue/slave that has files to be shipped.
+   """
+   if debug == 'on':
+      print "NOTICE: list_queue_func()"
+   queue = generate_slave_list_func()
+   if queue:
+      for host in queue:
+         queuedir = l_archivedir + "/" + str(host)
+         list_archives = os.listdir(queuedir)
+         if list_archives:
+            if debug == 'on':
+               print "Slave: " + host + " " + str(list_archives)
+            return host
+   else:
+      return 0
+
+def send_queue_func():
+   """
+   We are called before normal archive process in order to send queue files that have not been shipped yet.
+   If we have to transfer and we error we return the slave that failed. 
+   """
+   if debug == 'on':
+      print "NOTICE: send_queue_func()"
+   slaves = list_queue_func()
+   if slaves:
+      if debug == 'on':
+         print "NOTICE: processing " + slaves
+      for host in slaves:
+         queue_dir = l_archivedir + "/" + str(host)
+         # To deal with old versions of rsync
+         if rsync_version == '2':
+            source_or_sent = "--remove-sent-files"
+         else:
+            source_or_sent = "--remove-source-files"
+         queue_transfer =  """%s -azq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(rsync_bin), str(source_or_sent), str(ssh_flags), str(queue_dir), str(user), str(host), str(r_archivedir))
+         retval = system(queue_transfer)
+         if debug == 'on':
+            print queue_transfer
+         if retval:
+            return host
+
+def archive_func():
+   """
+   The main archive function. 
+   First we check the queue. If there are files in the queue we try to send
+   them.
+
+   If we can't send the files from the queue, we determining which slaves
+   can not send files. The archiver then automatically queues all logs for
+   those slaves which are not sending until they can send.
+   """
+   if debug == 'on':
+      print "NOTICE: archive_func()"
+ 
+   # First we send the queue files (if any). If we can't we exit 
+   queue = send_queue_func()
+   if queue:
+      if debug == 'on':
+         print "NOTICE: queue = " + queue
+         print "ERROR: Unable to send queued archived files, queueing"
+      system("%s" % (str(notify_warning)))
+      slaves = generate_slave_list_func()
+      if debug == 'on':
+         print "NOTICE: slaves = generate_slave_list_func() " + str(slaves)
+      for host in slaves:
+         if debug == 'on':
+            print "NOTICE: " + host + " in " + str(slaves)
+
+         # If the host returned is in the list, we automatically
+         # archive to the queue.
+
+         if host == queue:
+            if debug == on:
+               "NOTICE: Saving archives to queue"
+            queue_dir = l_archivedir + "/" + str(host)
+            queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir)) 
+            retval = system(queue_transfer)
+            if retval:
+               system("%s %d" % (str(notify_critical), retval))
+               exit(1)
+
+         # If the host returned is not in the list, we attempt to
+         # archive normally. If we can not, we archive to the queue. If we
+         # can not archive to the queue, we exit critical.
+
+   # You may end up with files out of order on the slave if the
+   # slave comes online after the queue check but before the current
+   # transfer. This is not a problem because pg_standby will only restore
+   # files in order, so on the next queue check the slave will receive
+   # the missing files and pg_standby will correctly restore them.
+
+   if debug == 'on':
+      print "NOTICE: Entering single file archive transfer"
+   for host in generate_slave_list_func():
+      if debug == 'on':
+         print "NOTICE: Archiving for: " + str(host)
+      if flush:
+         rsync_transfer = """%s -z %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(rsync_bin), str(pgdata), str(ssh_flags), str(user), str(host), str(r_archivedir))
+         flush_check_func()
+         check = check_pgpid_func()
+         if check == 0:
+            print "ERROR: Can not enter flush mode if PG is already running"
+            exit(1)
+      else:
+         rsync_transfer = """%s -zq -e "ssh %s" %s %s@%s:%s""" % (str(rsync_bin), str(ssh_flags), str(archivefile), str(user), str(host), str(r_archivedir))
+      if debug == 'on':
+         print "NOTICE: Shipping archive to: " + str(host)
+         print "NOTICE: Using: " + rsync_transfer
+      retval = system("%s" % (rsync_transfer))
+      if retval:
+         queue_dir = l_archivedir + "/" + str(host)
+         queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir)) 
+         retval = system(queue_transfer)
+         if retval:
+            print "FATAL: Unabled to rsync_transfer or queue_transfer"
+            system("%s %d" % (str(notify_critical), retval))
+            exit(1)
+         else:
+            retval = system("%s %d" % (str(notify_warning), retval))
+            exit(0)
+  
+# set up our transfer commands
+
+if debug == 'on':
+   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(timeout))
+else:
+   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(timeout))
+
+# Actually run
+if init:
+   print "We are initializing queues, one moment.\n"
+   init_env_func()
+else:
+   check_config_func()
+   if debug == 'on':
+      print "NOTICE: Performing standard archive"
+      archive_func()

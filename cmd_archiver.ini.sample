@@ -1,0 +1,42 @@
+[DEFAULT]
+; online or offline
+state: online					
+
+; The base database directory
+
+pgdata: /var/lib/postgresql/8.3/main
+
+; where to remotely copy archives
+r_archivedir: /var/lib/postgresql/archive
+
+; where to locally copy archives
+l_archivedir: /var/lib/postgresql/archive
+
+; where is rsync				
+rsync_bin: /usr/bin/rsync			
+
+; rsync version. We need to know to deal with old sofware RH ships
+; options are 2 or 3.
+
+rsync_version = 2
+
+; IP of slave					
+slaves: 10.1.2.5,10.1.3.5
+
+; the user that will be using scp				
+user: postgres					
+
+; if scp can't connect in 10 seconds error
+timeout: 10
+
+; command to process in ok					
+notify_ok: echo OK
+
+; command to process in warning
+notify_warning:  echo WARNING
+
+; command to process in critical
+notify_critical: echo CRITICAL
+
+; if you want to debug on/off only		 	
+debug: on

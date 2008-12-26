@@ -1,0 +1,72 @@
+[DEFAULT]
+; what major version are we using?
+pgversion: 8.2			
+
+; either we shell out to the remote server 
+; via ssh or we use direct psql for commands
+
+protocol: ssh			
+
+; Used for 8.2 (8.1?), should be set to something > than checkpoint_segments on master				
+numarchives: 10			
+
+; Commands needed for execution
+; absolute path to ssh
+ssh: /usr/bin/ssh		
+
+; absolute path to rsync
+rsync: /usr/bin/rsync
+
+; the path to to the postgres bin		
+psql: /usr/lib/postgresql/8.3/bin/psql	
+pg_standby: /usr/lib/postgresql/8.3/bin/pg_standby
+pg_ctl: /usr/lib/postgresql/8.3/bin/pg_ctl
+
+; Generalized information
+
+; the port postgresql runs on (master)
+port: 6000
+
+; ip or name of master server 			
+master_public_ip: 192.168.3.254
+
+; the ip address we should use when processing remote shell		
+master_local_ip: 127.0.0.1
+
+; the user performed initdb	
+user: postgres
+
+; on or off			
+debug: off	 	
+
+; the timeout for ssh before we throw an alarm
+ssh_timeout: 30			
+
+; should be the same as r_archivedir for archiver
+archivedir: /data2/pgsql/archive/
+
+; where you executed initdb -D to	
+pgdata: /data1/pgsql/data/	
+
+; Confs
+
+; This is the postgresql.conf to be used when not in standby
+postgresql_conf: /var/lib/postgresql/etc/postgresql.conf		
+
+; This is the pg_hba.conf to be used when not in standby
+pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf		
+
+; Alarms
+
+notify_critical: ls
+notify_warning:
+notify_ok:
+
+; On failover action
+
+; Whatever is placed here will be executed on -FS must return 0
+
+action_failover: /var/lib/postgresql/pitr_tools/failover.sh	
+
+
+

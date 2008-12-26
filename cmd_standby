@@ -1,0 +1,500 @@
+#!/usr/bin/python
+#
+#
+# cmd_standby copyright command prompt inc
+#
+#
+# $Id$
+"""
+License
+
+Copyright Command Prompt, Inc.
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose, without fee, and without a written agreement
+is hereby granted, provided that the above copyright notice and this
+paragraph and the following two paragraphs appear in all copies.
+
+IN NO EVENT SHALL COMMAND PROMPT, INC BE LIABLE TO ANY PARTY FOR    
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING  
+LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION,
+EVEN IF COMMAND PROMPT, INC HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+COMMAND PROMPT, INC SPECIFICALLY DISCLAIMS ANY WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN
+"AS IS" BASIS, AND COMMAND PROMPT, INC HAS NO OBLIGATIONS TO 
+PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+   
+"""
+
+import popen2
+import os
+import shutil
+import sys
+
+# before we do anything, let's just check you we are
+
+if os.geteuid()==0:
+    sys.exit("\nBad Mojo... no root access for this script\n")
+
+from ConfigParser import *
+from sys import *
+from optparse import OptionParser
+from os import system
+
+# Initiate command line switches
+
+usage = "usage: %prog [options] arg1 arg2"
+parser = OptionParser(usage=usage)
+
+parser.add_option("-A", "--action", dest="pgctl_action", action="store", help="Start/Stop PostgreSQL", metavar="start|stop|stop_basebackup")
+parser.add_option("-B", "--basebackup", dest="base_backup", action="store_true", help="Start a base backup", metavar="FILE")
+parser.add_option("-C", "--config", dest="configfilename", action="store", help="the name of the archiver config file", metavar="FILE")
+parser.add_option("-F", "--failover", dest="failover", action="store", help="If you are serious, set -F999", metavar="VALUE")
+parser.add_option("-I", "--dbinit", dest="dbinit", action="store_true", help="Use before -B", metavar="FILE")
+parser.add_option("-P", "--ping", dest="ping_check", action="store_true", help="Is my master alive?", metavar="FILE")
+parser.add_option("-R", "--recovertotime", dest="recovertotime", action="store", help="If you need to restore to a specific point in time", metavar="TIMESTAMP")
+parser.add_option("-S", "--standby", dest="standby", action="store_true", help="Enter standby mode", metavar="FILE")
+
+
+(options, args) = parser.parse_args()
+
+#define our working variables
+
+configfile = options.configfilename
+base_backup = options.base_backup
+standby = options.standby
+dbinit = options.dbinit
+pgctl_action = options.pgctl_action
+ping_check = options.ping_check
+failover = options.failover
+recovertotime = options.recovertotime
+   
+# initiate config parser
+config = ConfigParser()
+config.read(configfile)
+
+# Set up our keys
+pgversion = config.defaults()['pgversion']
+ssh = config.defaults()['ssh']
+rsync = config.defaults()['rsync']
+pgctl = config.defaults()['pg_ctl']
+psql = config.defaults()['r_psql']
+pg_standby = config.defaults()['pg_standby']
+master_public_ip = config.defaults()['master_public_ip']
+master_local_ip = config.defaults()['master_local_ip']
+user = config.defaults()['user']
+debug = config.defaults()['debug']
+port = config.defaults()['port']
+ssh_timeout = config.defaults()['ssh_timeout']
+archivedir = config.defaults()['archivedir']
+pgdata = config.defaults()['pgdata']
+pgconf = config.defaults()['postgresql_conf']
+hbaconf = config.defaults()['pg_hba_conf']
+action_failover = config.defaults()['action_failover']
+numarchives = config.defaults()['numarchives']
+
+# Validate the command line
+
+def command_line_check_func():
+   if configfile == None:
+      print
+      parser.error("option -C is required")
+      print
+
+   if recovertotime and not (failover == '999'):
+      print
+      parser.error("option -R requires open -F999")
+      print
+      
+   if pgctl_action:
+      print
+      valid_action = ['start', 'stop', 'stop_basebackup','start_basebackup']
+      print
+      if pgctl_action not in valid_action:
+         print
+         parser.error("option -A requires one of start, stop, stop_basebackup or start_basebackup")
+         print 
+
+
+# Let's make sure executables can be reached
+
+def check_config_func():
+   pathvars = [ssh,rsync,pgctl,psql,pg_standby,archivedir,pgconf,hbaconf] 
+   for element in pathvars:
+      try:
+         os.stat("%s" % (str(element)))
+      except OSError, e:
+         print "CONFIG %s:  %s" % (str(element),str(e))
+         exit(1)
+         
+#
+# Check if our pg_xlog is a link or directory and react accordingly
+#
+
+def check_pgxlog_path_func():
+   pg_xlog_dir = """%s/%s""" % (str(pgdata),str('pg_xlog'))
+   pg_xlog_realpath = os.path.realpath(pg_xlog_dir) 
+   if os.path.islink(pg_xlog_dir):
+      try:
+         os.stat(pg_xlog_realpath)
+      except:
+         try:
+            os.makedirs(pg_xlog_realpath,0700)
+         except OSError, e:
+            print "ERROR: %s" % (str(e))
+            print "HINT: You may have permission problems"
+            print "Make sure that %s has the ability to create the directory %s" % ((str(user), (str(pg_xlog_realpath))))
+            exit(1)
+   else:
+      exit(0)
+      
+# Notifications 
+
+def notify_ok_func():
+   if config.defaults()['notify_ok']:
+      notify_ok = config.defaults()['notify_ok']
+   else:
+      notify_ok = None   
+
+def notify_warning_func():
+   if config.defaults()['notify_warning']:
+      notify_warning = config.defaults()['notify_warning']
+   else:
+      notify_warning = None   
+
+def notify_critical_func():
+   if config.defaults()['notify_critical']:
+      notify_critical = config.defaults()['notify_critical']
+   else:
+      notify_critical = None     
+
+# Configure some basics
+
+if debug == "on":
+   ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
+   rsync_flags = "-avzl --delete --stats --exclude=backup_label"
+   if pgversion == '8.2':
+     pg_standby_flags = "-s5 -w0 -d -c %%f %%p -k%s" % (float(numarchives))
+   else:
+     pg_standby_flags = "-s5 -w0 -d -c %f %p %r"
+  
+else:
+   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
+   rsync_flags = "-azl --delete --exclude=backup_label"
+   if pgversion == '8.2':
+     pg_standby_flags = "-s5 -w0 -c %%f %%p -k%s" % (float(numarchives))
+   else:
+     pg_standby_flags = "-s5 -w0 -c %f %p %r"
+
+ssh_connect = """%s %s %s@%s""" % (str(ssh), str(ssh_flags), str(user),str(master_public_ip))
+
+# Yes the odd counted " is needed because of the way we have to quote within the command
+# There may be a better way to do this, but I got tired of fighting.
+
+if not master_local_ip:
+   psql_connect =  """ "%s -A -t -U%s -p%s -dpostgres """ % (str(psql), str(user), str(port))
+else:
+   psql_connect =  """ "%s -A -t -U%s -h%s -p%s -dpostgres """ % (str(psql), str(user), str(master_local_ip), str(port))
+
+copy_dirs = "%s %s --exclude=pg_log/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (str(rsync), str(rsync_flags), str(user), str(master_public_ip))
+ssh_psql = ssh_connect + psql_connect
+
+
+# Recovery string for recovery.conf
+recovery_file = """%s/recovery.conf""" % (str(pgdata))
+
+if failover == '999' and not recovertotime:
+   recovery_string = """restore_command = 'cp %s/%%f "%%p"'""" % (str(archivedir))
+elif failover == '999' and recovertotime:
+   recovery_string = """restore_command = 'cp %s/%%f "%%p"'\nrecovery_target_time = '%s'""" % (str(archivedir),str(recovertotime)) 
+else:
+   recovery_string = """restore_command = '%s  %s %s' """ % (str(pg_standby), str(archivedir), str(pg_standby_flags))
+
+# Check the master for being alive
+
+def ping_check_func():
+   query = """'SELECT 1'"""
+   if debug == 'on':
+      print "DEBUG: %s %s" % (str(ssh_psql),(str(query)))
+   ping = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))
+   if debug == 'on':
+      print "DEBUG: " + ping
+   success = ping.readlines()
+   for row in success:
+      row = row.rstrip('\n')
+      if debug == 'on':
+         print "DEBUG: " + row
+   if str(row) != "1":
+      print "ERROR: Processing critical alert"
+      notify_critical_func()
+      exit(1)
+   else:
+      print "SUCCESS: Master returned: %s" % (str(row))
+      exit(0)
+
+# This function gives us all the non pgdata directories required
+# for operation, such as table spaces
+
+def get_datadirs_func():
+   try:
+      query = """'SELECT * FROM cmd_get_data_dirs()'"""
+   except Exception, e:
+      print "ERROR: Unable to get data directories"
+      print "HINT: Did you apply cmd_standby.sql?"
+      print "EXCEPTION: %s" % (str(e))   
+   paths = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))
+   if debug == 'on':    
+         print "DEBUG: " + paths
+   return paths.readlines()
+
+# Start a base backup on the master
+# First we issue a checkpoint and then a start backup
+
+def start_backup_func():
+   query = """ 'checkpoint' """
+   checkpoint = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))   
+   success = checkpoint.readlines()
+   for row in success:
+      row = row.rstrip('\n')
+      if debug == 'on':
+         print "DEBUG: " + row
+      if str(row) != "CHECKPOINT":
+         print "ERROR: Unable to execute CHECKPOINT"
+         notify_critical_func()
+         exit(1)
+   query = """ 'SELECT cmd_pg_start_backup()' """
+   startbackup = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))   
+   success = startbackup.readlines()
+   for row in success:
+      row = row.rstrip('\n')
+      if debug == 'on':
+         print "DEBUG: cmd_pg_start_backup:  " + row
+      if str(row) != "1":
+         print "ERROR: UNABLE to start base backup"
+         exit(1)
+
+def stop_backup_func():
+   query = """ 'SELECT cmd_pg_stop_backup()' """
+   stopbackup = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))
+   success = stopbackup.readlines()
+   for row in success:
+      row = row.rstrip('\n')
+      if debug == 'on':
+         print "DEBUG: cmd_pg_stop_backup: " + row
+      if str(row) != "1":
+         print "ERROR: Unable to stop base backup"
+         exit(1)
+
+# Simple function to help ensure we have all paths created for postgresql
+#
+
+def dbinit_func():
+   paths = get_datadirs_func()
+   for row in paths:
+      if debug == 'on':
+         print "DEBUG: " + row
+      row = row.rstrip('\n')
+      try:
+         os.makedirs(row,0700)
+      except OSError, e:
+            print "ERROR: %s" % (str(e))
+            print "HINT: You may have permission problems"
+            print "Make sure that %s has the ability to create the directory: " % (str(user))
+            print "%s" % ((str(row)))
+            exit(1)
+
+
+# Takes a base backup of master. This function is tricky because
+# there is a possibility of a non 0 exit status even when successful
+
+def base_backup_func():
+   retval = os.system("rm -rf %s/%s" % ((archivedir),str('*')))
+   if retval:
+      print "Unable to remove old archives"
+      exit(1)
+   try:
+      query = """'SELECT * FROM cmd_get_data_dirs()'"""
+   except Exception, e:
+      print "ERROR: Unable to get data directories"
+      print "HINT: Did you apply cmd_standby.sql?"
+      print "EXCEPTION: %s" % (str(e))   
+   paths = get_datadirs_func()
+   if debug == 'on':
+      print "DEBUG: " +  paths
+   for row in paths:
+      row = row.rstrip('\n')
+      retval = system("%s%s/ %s/" % (copy_dirs,row,row))
+      if retval:
+         print
+         print "WARNING: Failed to get 0 exit status"
+         print "LOG: Check your rsync errors as this may be harmless"
+         print "LOG: File vanished: .... is ok"
+         print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
+         print
+         exit(1)
+
+# Start postgresql
+
+def start_postgresql_func():
+   retval = system("%s -D %s start" % (str(pgctl),str(pgdata)))
+   if retval:
+      print "Unable to start PostgreSQL"
+      notify_warning_func()
+      exit(1)
+
+# Stop postgresql
+
+def stop_postgresql_func():
+   retval = system("%s -D %s -m fast stop" % (str(pgctl),str(pgdata)))
+   if retval:
+      print "Unable to stop PostgreSQL"
+      notify_critical_func()
+      exit(1)
+
+# Writes recovery.conf file to pgdata
+
+def write_recovery_func():
+   try:
+      file = open(recovery_file,'w')
+      file.write('%s' % (str(recovery_string)))
+      file.close()
+   except Exception, e:
+      print "Unable to write recovery file: %s" % (str(recovery_file))
+      print "Exception: %s" % (str(e))
+      notify_critical_func()
+      exit(1)
+
+# Copies in production slave configurations from storage location to production pgdata location
+
+def copy_confs_func():
+   try:
+      shutil.copy(pgconf,pgdata)
+   except Exception, e:
+      print "Unable to copy configuration files: %s" % (str(pgconf))
+      print "Exception: %s" % (str(e))
+      exit(1)
+   try:
+      shutil.copy(hbaconf,pgdata)
+   except Exception, e:
+      print "Unable to copy configuration files: %s" % (str(hbaconf))
+      print "Exception: %s" % (str(e))
+      exit(1)
+
+
+# Let's make sure that that postgresql is not actually running when needed
+#
+
+def check_pgpid_func():
+   pidfile = '%s/postmaster.pid' % (str(pgdata))
+   try:
+      check = os.stat(pidfile)
+      if check:
+         file = open(pidfile,'r')
+         line = int(file.readline())
+      sendsignal = os.kill(line,0)
+      return 0
+   except:
+      return 1
+
+# Standby function, we need to write the recovery configuration
+# and start postgresql
+  
+def standby_func():
+   write_recovery_func()
+   start_postgresql_func()
+
+#
+# Function allows you to specify a script to execute on failover
+# The script must return 0 to be considered successful
+
+def failover_action_func():
+   if action_failover:
+      retval = system("%s" % (str(action_failover)))
+      if retval:
+         notify_critical_func()     
+         exit(1)
+      else:
+         exit(0)
+ 
+# Before we do anything, let's check the config and command line
+
+check_config_func()
+command_line_check_func()
+
+if dbinit:
+   check = check_pgpid_func()
+   if check == 0:
+      print "ERROR: Can not execute --dbinit with PG running locally"
+      exit(1)
+   else:
+      dbinit_func()
+
+# Run a base backup
+
+if base_backup:
+   check = check_pgpid_func()
+   if check == 0:
+      print "ERROR: Can not take base backup with PG running locally"
+      exit(1)
+   else:
+      start_backup_func()
+      base_backup_func()
+      stop_backup_func()
+      check_pg_xlog = check_pgxlog_path_func()
+      if check_pg_xlog:
+         notify_critical_func()
+         exit(1)
+      else:
+         exit(0)
+
+# If we want to failover to the latest good transaction
+
+if failover == '999':
+   if not recovertotime:
+      check = check_pgpid_func()
+      if check == 0:
+         stop_postgresql_func()
+      write_recovery_func()
+      copy_confs_func()
+      start_postgresql_func()
+      failover_action_func()
+      notify_ok_func()
+   
+   # If we want to failover to a specific point in time
+   if recovertotime:
+      check = check_pgpid_func()
+      if check == 0:
+         print "PostgreSQL is running. Bailing out"
+         exit(1)
+      write_recovery_func()
+      copy_confs_func()
+      start_postgresql_func()
+
+# If we want to enter standby mode
+
+if standby:
+   check = check_pgpid_func()
+   if check == 0:
+      print "ERROR: Can not enter standby mode if PG is already running"
+      exit(1)
+   else:
+      standby_func()
+
+# If we want to check if we can talk to the master
+
+if ping_check:
+   ping_check_func()   
+
+# If we want to start or stop postgresql on the slave
+
+if pgctl_action == 'start':
+   start_postgresql_func()
+elif pgctl_action == 'stop':
+   stop_postgresql_func()
+
+if pgctl_action == 'stop_basebackup':
+   stop_backup_func()
+   

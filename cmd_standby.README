@@ -1,0 +1,148 @@
+The cmd_standby script is a utility that allows easy management of a warm 
+standby PostgreSQL server. It currently has the following capabilities:
+
+ * Automatically take a base backup, including table spaces
+ * Automatically restore archives
+ * Automatically purge old archives (if PostgreSQL >8.3)
+ * Alert based on failures
+ * Failover to latest archive point
+ * Stop and start postgresql 
+
+*****
+Usage: cmd_standby [options] arg1 arg2
+
+Options:
+  -h, --help            show this help message and exit
+  -A start|stop, --action=start|stop
+                        Start or Stop PostgreSQL
+  -B, --basebackup      Start/Stop a base backup
+  -C FILE, --config=FILE
+                        the name of the archiver config file
+  -F VALUE, --failover=VALUE
+                        If you are serious, set -F999
+  -I, --dbinit          Use before -B
+  -P, --ping            Is my master alive?
+  -R TIMESTAMP, --recovertotime=TIMESTAMP
+                        If you need to restore to a specific point in time
+  -S, --standby         Enter standby mode
+*****
+
+You need to apply cmd_standby.sql to master database before starting 
+standby process on slave.
+
+The process of configuring a standby slave is akin to the following:
+
+./cmd_standby -C cmd_standby.ini -I
+
+Fix any problems it reports. Which is likely be pathing or permission issues.
+
+./cmd_standby -C cmd_standby.ini -B
+
+Will start the base backup and fix up pg_xlog if its linked.
+
+./cmd_standby -C cmd_standby.ini -S
+
+If you want a warm standby, use -S. If you want a cold. You are done.
+
+The process of bringing a warm standby into production is:
+
+./cmd_standby -C cmd_standby.ini -F999
+
+Wait.... smile, Drink a beer.
+
+The process to bring a standby into production but at a certain point in time is:
+
+./cmd_standby -C cmd_standby.ini -F999 -R '2008-05-28 11:00:38.059389'
+
+Where -R is a valid timestamp.
+
+Configuration:
+
+You can call the ini file anything you like however you must have the following header:
+
+[DEFAULT]
+
+In the file.
+
+ * pgversion: 8.2			
+
+Can be of 8.2 or 8.3. 8.2 does not purge files correctly. You will need to
+configure a cron to do so.
+
+  * numarchives: 10
+
+Only valid if pgversion is 8.2. The number of archives to keep that is 
+greater than checkpoint_segments. E.g; If checkpoint_segments is 3, the 
+slave will keep 13. Not yet implemented.
+
+ * ssh: /usr/bin/ssh
+
+The absolute path to the ssh binary.
+
+ * rsync: /usr/bin/rsync
+
+The absolute path to the rsync binary.
+
+ * r_psql: /usr/lib/postgresql/8.3/bin/psql
+
+The absolute path to the psql binary on the master.
+
+ * pg_standby: /usr/lib/postgresql/8.3/bin/pg_standby
+
+The absolute path to the pg_standby binary
+
+ * pg_ctl: /usr/lib/postgresql/8.3/bin/pg_ctl
+
+The absolute path to the pg_ctl binary.
+
+ * port: 6000
+
+The port on the master that postgresql is listening
+
+ * master_public_ip: 192.168.3.254
+
+The external available ip address for ssh
+
+ * master_local_ip: 127.0.0.1
+
+The internal ip address psql should connect to on the master
+
+ * user: postgres
+
+The user who performed initdb
+
+ * debug: on
+
+If you want lots of diagnostic info
+
+ * ssh_timeout: 30
+
+If ssh can not connect in this many seconds, we will throw an alarm and exit.
+
+ * archivedir: /data2/pgsql/archive/
+
+This is where cmd_archiver is copying files from the master to the slave.
+
+ * pgdata: /data1/pgsql/data/
+
+The absolute path to your cluster directory.
+
+ * postgresql_conf: /var/lib/postgresql/etc/postgresql.conf
+
+The absolute path to the postgresql.conf to use when we failover.
+
+ * pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf		
+
+The absolute path to the pg_hba.conf to use when we failover.
+
+ * notify_critical: 
+ * notify_warning:
+ * notify_ok:
+
+Absolute paths to the script to fire at each alarm level.
+
+ * action_failover: /var/lib/postgresql/pitr_tools/failover.sh
+
+Absolute path to the script to fire at the end of failover. This might be
+to change an IP address on the slave (for example).
+
