@@ -15,13 +15,14 @@ l_archivedir: /var/lib/postgresql/archive
 ; where is rsync				
 rsync_bin: /usr/bin/rsync			
 
-; rsync version. We need to know to deal with old sofware RH ships
-; options are 2 or 3.
+; option 2 or 3, if running RHEL5 or similar it is likely 2
+; if you are running something that ships remotely modern software
+; it will be 3
 
 rsync_version = 2
 
 ; IP of slave					
-slaves: 10.1.2.5,10.1.3.5
+slaves: 192.168.1.201,192.168.1.202
 
 ; the user that will be using scp				
 user: postgres					
@@ -40,3 +41,6 @@ notify_critical: echo CRITICAL
 
 ; if you want to debug on/off only		 	
 debug: on
+
+; if you want ssh debug (warning noisy)
+ssh_debug: off

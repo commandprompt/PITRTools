@@ -69,6 +69,7 @@ notify_critical = config.defaults()['notify_critical']
 debug = config.defaults()['debug']
 pgdata = config.defaults()['pgdata']
 rsync_version = config.defaults()['rsync_version']
+ssh_debug = config.defaults()['ssh_debug']
 
 """
 If we are not online, exit immediately
@@ -193,17 +194,20 @@ def list_queue_func():
    """
    if debug == 'on':
       print "NOTICE: list_queue_func()"
-   queue = generate_slave_list_func()
-   if queue:
-      for host in queue:
-         queuedir = l_archivedir + "/" + str(host)
-         list_archives = os.listdir(queuedir)
-         if list_archives:
-            if debug == 'on':
-               print "Slave: " + host + " " + str(list_archives)
-            return host
-   else:
-      return 0
+      # Empty host array
+   hosts = []
+   # Loop through the list of slaves
+   for host in generate_slave_list_func():
+      queuedir = l_archivedir + "/" + str(host)
+      list_archives = os.listdir(queuedir)
+      # If there is an archive directory, then we're good.
+      if list_archives:
+         # add to list of hosts
+         hosts.append(host)
+         if debug == 'on':
+            for host in generate_slave_list_func():
+               print "NOTICE: SLAVE: " + host + " " + str(list_archives)
+   return hosts
 
 def send_queue_func():
    """
@@ -212,23 +216,26 @@ def send_queue_func():
    """
    if debug == 'on':
       print "NOTICE: send_queue_func()"
-   slaves = list_queue_func()
-   if slaves:
+   for host in list_queue_func():
       if debug == 'on':
-         print "NOTICE: processing " + slaves
-      for host in slaves:
-         queue_dir = l_archivedir + "/" + str(host)
-         # To deal with old versions of rsync
-         if rsync_version == '2':
-            source_or_sent = "--remove-sent-files"
-         else:
-            source_or_sent = "--remove-source-files"
-         queue_transfer =  """%s -azq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(rsync_bin), str(source_or_sent), str(ssh_flags), str(queue_dir), str(user), str(host), str(r_archivedir))
-         retval = system(queue_transfer)
+         print "NOTICE: Host = " + host
+      queue_dir = l_archivedir + "/" + str(host)
+      if debug == 'on':
+         print "NOTICE: queue_dir = " + queue_dir
+      # To deal with old versions of rsync
+      if rsync_version == '2':
          if debug == 'on':
-            print queue_transfer
-         if retval:
-            return host
+            print "NOTICE: rsync_version = " + rsync_version 
+         source_or_sent = "--remove-sent-files"
+      else:
+         source_or_sent = "--remove-source-files"
+      queue_transfer =  """%s -azq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(rsync_bin), str(source_or_sent), str(ssh_flags), str(queue_dir), str(user), str(host), str(r_archivedir))
+      retval = system(queue_transfer)
+      if debug == 'on':
+         print "NOTICE: Transfering queue = " + queue_transfer
+         print "NOTICE: Transfer retval = " + str(retval)
+      if retval:
+         return host
 
 def archive_func():
    """
@@ -261,7 +268,7 @@ def archive_func():
          # archive to the queue.
 
          if host == queue:
-            if debug == on:
+            if debug == 'on':
                "NOTICE: Saving archives to queue"
             queue_dir = l_archivedir + "/" + str(host)
             queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir)) 
@@ -312,8 +319,8 @@ def archive_func():
   
 # set up our transfer commands
 
-if debug == 'on':
-   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(timeout))
+if ssh_debug == 'on':
+   ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(timeout))
 else:
    ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(timeout))
 
