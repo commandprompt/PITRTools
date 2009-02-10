@@ -18,9 +18,11 @@ ssh: /usr/bin/ssh
 rsync: /usr/bin/rsync
 
 ; the path to to the postgres bin		
-psql: /usr/lib/postgresql/8.3/bin/psql	
 pg_standby: /usr/lib/postgresql/8.3/bin/pg_standby
 pg_ctl: /usr/lib/postgresql/8.3/bin/pg_ctl
+
+; path to psql on the master
+r_psql: /usr/lib/postgresql/8.3/bin/psql	
 
 ; Generalized information
 
