@@ -269,13 +269,17 @@ def archive_func():
 
          if host == queue:
             if debug == 'on':
-               "NOTICE: Saving archives to queue"
+               print "NOTICE: Saving archives to queue"
             queue_dir = l_archivedir + "/" + str(host)
             queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir)) 
             retval = system(queue_transfer)
             if retval:
                system("%s %d" % (str(notify_critical), retval))
                exit(1)
+            else:
+               if debug == 'on':
+                  print "NOTICE: Sending OK alert"
+               system("%s %d" % (str(notify_ok), retval))
 
          # If the host returned is not in the list, we attempt to
          # archive normally. If we can not, we archive to the queue. If we
@@ -316,7 +320,11 @@ def archive_func():
          else:
             retval = system("%s %d" % (str(notify_warning), retval))
             exit(0)
-  
+      else:
+         if debug == 'on':
+            print "NOTICE: Sending OK alert"
+         system("%s %d" % (str(notify_ok), retval))
+
 # set up our transfer commands
 
 if ssh_debug == 'on':

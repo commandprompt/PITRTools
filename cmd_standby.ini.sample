@@ -2,11 +2,6 @@
 ; what major version are we using?
 pgversion: 8.2			
 
-; either we shell out to the remote server 
-; via ssh or we use direct psql for commands
-
-protocol: ssh			
-
 ; Used for 8.2 (8.1?), should be set to something > than checkpoint_segments on master				
 numarchives: 10			
 
