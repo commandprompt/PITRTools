@@ -51,11 +51,11 @@ parser = OptionParser(usage=usage)
 
 parser.add_option("-A", "--action", dest="pgctl_action", action="store", help="Start/Stop PostgreSQL", metavar="start|stop|stop_basebackup")
 parser.add_option("-B", "--basebackup", dest="base_backup", action="store_true", help="Start a base backup", metavar="FILE")
-parser.add_option("-C", "--config", dest="configfilename", action="store", help="the name of the archiver config file", metavar="FILE")
+parser.add_option("-C", "--config", dest="configfilename", action="store", help="Name of the archiver config file", metavar="FILE")
 parser.add_option("-F", "--failover", dest="failover", action="store", help="If you are serious, set -F999", metavar="VALUE")
 parser.add_option("-I", "--dbinit", dest="dbinit", action="store_true", help="Use before -B", metavar="FILE")
 parser.add_option("-P", "--ping", dest="ping_check", action="store_true", help="Is my master alive?", metavar="FILE")
-parser.add_option("-R", "--recovertotime", dest="recovertotime", action="store", help="If you need to restore to a specific point in time", metavar="TIMESTAMP")
+parser.add_option("-R", "--recovertotime", dest="recovertotime", action="store", help="To restore to a specific point in time", metavar="TIMESTAMP")
 parser.add_option("-S", "--standby", dest="standby", action="store_true", help="Enter standby mode", metavar="FILE")
 
 
