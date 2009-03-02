@@ -340,4 +340,4 @@ else:
    check_config_func()
    if debug == 'on':
       print "NOTICE: Performing standard archive"
-      archive_func()
+   archive_func()
