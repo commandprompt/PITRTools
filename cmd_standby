@@ -122,7 +122,7 @@ def command_line_check_func():
 # Let's make sure executables can be reached
 
 def check_config_func():
-   pathvars = [ssh,rsync,pgctl,psql,pg_standby,archivedir,pgconf,hbaconf] 
+   pathvars = [ssh,rsync,pgctl,pg_standby,archivedir,pgconf,hbaconf] 
    for element in pathvars:
       try:
          os.stat("%s" % (str(element)))
