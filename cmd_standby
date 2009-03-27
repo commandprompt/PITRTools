@@ -417,6 +417,8 @@ def failover_action_func():
          notify_critical_func()     
          exit(1)
       else:
+         print "NOTICE: Statistics are not replicated in warm standy mode."
+         print "HINT: Execute ANALYZE on your databases"
          exit(0)
  
 # Before we do anything, let's check the config and command line
