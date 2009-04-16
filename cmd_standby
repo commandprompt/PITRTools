@@ -180,7 +180,7 @@ if debug == "on":
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
-     pg_standby_args = "%s %p %r"
+     pg_standby_args = "%f %p %r"
   
 else:
    ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
@@ -189,7 +189,7 @@ else:
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
-     pg_standby_args = "%s %p %r"
+     pg_standby_args = "%f %p %r"
 
 ssh_connect = """%s %s %s@%s""" % (str(ssh), str(ssh_flags), str(user),str(master_public_ip))
 
