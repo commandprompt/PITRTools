@@ -176,18 +176,20 @@ def notify_critical_func():
 if debug == "on":
    ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
    rsync_flags = "-avzl --delete --stats --exclude=backup_label"
+   pg_standby_flags = "-s5 -w0 -d -c"
    if pgversion == '8.2':
-     pg_standby_flags = "-s5 -w0 -d -c %%f %%p -k%s" % (float(numarchives))
+     pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
-     pg_standby_flags = "-s5 -w0 -d -c %f %p %r"
+     pg_standby_args = "%%s %%p %%r"
   
 else:
    ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
    rsync_flags = "-azl --delete --exclude=backup_label"
+   pg_standby_flags = "-s5 -w0 -c"
    if pgversion == '8.2':
-     pg_standby_flags = "-s5 -w0 -c %%f %%p -k%s" % (float(numarchives))
+     pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
-     pg_standby_flags = "-s5 -w0 -c %f %p %r"
+     pg_standby_args = "%%s %%p %%r"
 
 ssh_connect = """%s %s %s@%s""" % (str(ssh), str(ssh_flags), str(user),str(master_public_ip))
 
@@ -211,8 +213,8 @@ if failover == '999' and not recovertotime:
 elif failover == '999' and recovertotime:
    recovery_string = """restore_command = 'cp %s/%%f "%%p"'\nrecovery_target_time = '%s'""" % (str(archivedir),str(recovertotime)) 
 else:
-   recovery_string = """restore_command = '%s  %s %s' """ % (str(pg_standby), str(archivedir), str(pg_standby_flags))
-
+   recovery_string = """restore_command = '%s %s %s %s' """ % (str(pg_standby), str(pg_standby_flags), str(archivedir), str(pg_standby_args))
+   
 # Check the master for being alive
 
 def ping_check_func():
