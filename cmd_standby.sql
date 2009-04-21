@@ -1,3 +1,5 @@
+-- These are the helper scripts for cmd_standby. You apply them to the master "postgres" database;
+-- ;
 CREATE OR REPLACE FUNCTION cmd_get_data_dirs() RETURNS SETOF TEXT AS $$
    SELECT DISTINCT CASE WHEN t.spclocation <> '' THEN t.spclocation ELSE s.setting END 
       FROM pg_catalog.pg_settings s, pg_catalog.pg_tablespace t 
