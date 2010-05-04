@@ -51,7 +51,7 @@ configfile = options.configfilename
 flush = options.flush
 init = options.init
 
-# initiate config parser 
+# initiate config parser
 config = ConfigParser()
 config.read(configfile)
 
@@ -82,11 +82,11 @@ if state != 'online':
 
 
 def generate_slave_list_func():
-   """ 
-   We now support multiple slaves (see the README) in order do that properly 
+   """
+   We now support multiple slaves (see the README) in order do that properly
    we have to break up the string and turn it into a list
    """
-   
+
    slaves = config.defaults()['slaves']
    s = str(slaves)
    s.replace("'","")
@@ -114,9 +114,9 @@ def init_env_func():
       print "EXCEPTION: %s" % (str(e))
       exit(1);
 
-def check_config_func():  
-   """ 
-   Let's make sure that our directories and executables exist 
+def check_config_func():
+   """
+   Let's make sure that our directories and executables exist
    """
    if debug == 'on':
       print "NOTICE: check_config_func()"
@@ -212,8 +212,10 @@ def list_queue_func():
 def send_queue_func():
    """
    We are called before normal archive process in order to send queue files that have not been shipped yet.
-   If we have to transfer and we error we return the slave that failed. 
+   If we have to transfer and we error we return the slave that failed.
    """
+   # Olek's fix
+   rtn = []
    if debug == 'on':
       print "NOTICE: send_queue_func()"
    for host in list_queue_func():
@@ -225,7 +227,7 @@ def send_queue_func():
       # To deal with old versions of rsync
       if rsync_version == '2':
          if debug == 'on':
-            print "NOTICE: rsync_version = " + rsync_version 
+            print "NOTICE: rsync_version = " + rsync_version
          source_or_sent = "--remove-sent-files"
       else:
          source_or_sent = "--remove-source-files"
@@ -235,11 +237,14 @@ def send_queue_func():
          print "NOTICE: Transfering queue = " + queue_transfer
          print "NOTICE: Transfer retval = " + str(retval)
       if retval:
-         return host
+         # Olek's fix
+         #return host
+         rtn.append(host)
+   return rtn
 
 def archive_func():
    """
-   The main archive function. 
+   The main archive function.
    First we check the queue. If there are files in the queue we try to send
    them.
 
@@ -249,12 +254,12 @@ def archive_func():
    """
    if debug == 'on':
       print "NOTICE: archive_func()"
- 
-   # First we send the queue files (if any). If we can't we exit 
+
+   # First we send the queue files (if any). If we can't we exit
    queue = send_queue_func()
    if queue:
       if debug == 'on':
-         print "NOTICE: queue = " + queue
+         print "NOTICE: queue = " + str(queue)
          print "ERROR: Unable to send queued archived files, queueing"
       system("%s" % (str(notify_warning)))
       slaves = generate_slave_list_func()
@@ -267,11 +272,13 @@ def archive_func():
          # If the host returned is in the list, we automatically
          # archive to the queue.
 
-         if host == queue:
+         # Olek's fix
+         #if host == queue:
+         if host in queue:
             if debug == 'on':
                print "NOTICE: Saving archives to queue"
             queue_dir = l_archivedir + "/" + str(host)
-            queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir)) 
+            queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir))
             retval = system(queue_transfer)
             if retval:
                system("%s %d" % (str(notify_critical), retval))
@@ -290,6 +297,8 @@ def archive_func():
    # transfer. This is not a problem because pg_standby will only restore
    # files in order, so on the next queue check the slave will receive
    # the missing files and pg_standby will correctly restore them.
+
+   exit_with = None
 
    if debug == 'on':
       print "NOTICE: Entering single file archive transfer"
@@ -310,20 +319,29 @@ def archive_func():
          print "NOTICE: Using: " + rsync_transfer
       retval = system("%s" % (rsync_transfer))
       if retval:
+         # Olek's fix
+         print "NOTICE: no luck shipping archive"
          queue_dir = l_archivedir + "/" + str(host)
-         queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir)) 
+         queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir))
          retval = system(queue_transfer)
          if retval:
             print "FATAL: Unabled to rsync_transfer or queue_transfer"
             system("%s %d" % (str(notify_critical), retval))
-            exit(1)
+            # Olek's fix
+            #exit(1)
+            exit_with = 1
          else:
             retval = system("%s %d" % (str(notify_warning), retval))
-            exit(0)
+            # Olek's fix
+            #exit(0)
+            exit_with = 0
       else:
          if debug == 'on':
             print "NOTICE: Sending OK alert"
          system("%s %d" % (str(notify_ok), retval))
+    # Olek's fix
+   if exit_with:
+      exit(exit_with)
 
 # set up our transfer commands
 
