@@ -175,14 +175,14 @@ def notify_critical_func():
 # Configure some basics
 
 if debug == "on":
-   rsync_flags = "-avzl --delete --stats --exclude=backup_label"
+   rsync_flags = "-avzl --delete --stats"
    pg_standby_flags = "-s5 -w0 -d -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
      pg_standby_args = "%f %p %r"
 else:
-   rsync_flags = "-azl --delete --exclude=backup_label"
+   rsync_flags = "-azl --delete"
    pg_standby_flags = "-s5 -w0 -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
@@ -244,13 +244,14 @@ def ping_check_func():
 # for operation, such as table spaces
 
 def get_datadirs_func():
+   query = """'SELECT * FROM cmd_get_data_dirs()'"""
    try:
-      query = """'SELECT * FROM cmd_get_data_dirs()'"""
+      paths = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))
    except Exception, e:
       print "ERROR: Unable to get data directories"
       print "HINT: Did you apply cmd_standby.sql?"
       print "EXCEPTION: %s" % (str(e))   
-   paths = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))
+      raise
    return paths.readlines()
 
 # Start a base backup on the master
@@ -318,12 +319,7 @@ def base_backup_func():
    if retval:
       print "Unable to remove old archives"
       exit(1)
-   try:
-      query = """'SELECT * FROM cmd_get_data_dirs()'"""
-   except Exception, e:
-      print "ERROR: Unable to get data directories"
-      print "HINT: Did you apply cmd_standby.sql?"
-      print "EXCEPTION: %s" % (str(e))   
+
    paths = get_datadirs_func()
    if debug == 'on':
       print "DEBUG: " +  paths
