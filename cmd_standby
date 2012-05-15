@@ -237,6 +237,15 @@ def ping_check_func():
       print "SUCCESS: Master returned: %s" % (str(row))
       exit(0)
 
+
+# TODO: replace popen with subprocess module calls.
+def exec_query_on_primary(query):
+   """ Runs a database query on the primary node and returns the psql output"""
+   p = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))
+   result = p.readlines()
+   return result
+
+
 # This function gives us all the non pgdata directories required
 # for operation, such as table spaces
 
