@@ -87,6 +87,7 @@ master_public_ip = config.defaults()['master_public_ip']
 master_local_ip = config.defaults()['master_local_ip']
 user = config.defaults()['user']
 debug = config.defaults()['debug']
+ssh_debug = config.defaults()['ssh_debug']
 port = config.defaults()['port']
 ssh_timeout = config.defaults()['ssh_timeout']
 archivedir = config.defaults()['archivedir']
@@ -174,22 +175,24 @@ def notify_critical_func():
 # Configure some basics
 
 if debug == "on":
-   ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
    rsync_flags = "-avzl --delete --stats --exclude=backup_label"
    pg_standby_flags = "-s5 -w0 -d -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
      pg_standby_args = "%f %p %r"
-  
 else:
-   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
    rsync_flags = "-azl --delete --exclude=backup_label"
    pg_standby_flags = "-s5 -w0 -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
      pg_standby_args = "%f %p %r"
+
+if ssh_debug == "on":
+   ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
+else:
+   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
 
 ssh_connect = """%s %s %s@%s""" % (str(ssh), str(ssh_flags), str(user),str(master_public_ip))
 
@@ -248,8 +251,6 @@ def get_datadirs_func():
       print "HINT: Did you apply cmd_standby.sql?"
       print "EXCEPTION: %s" % (str(e))   
    paths = os.popen("%s -c %s\"" % (str(ssh_psql),str(query)))
-   if debug == 'on':    
-         print "DEBUG: " + paths
    return paths.readlines()
 
 # Start a base backup on the master
