@@ -36,6 +36,9 @@ user: postgres
 ; on or off			
 debug: off	 	
 
+; on or off
+ssh_debug: off
+
 ; the timeout for ssh before we throw an alarm
 ssh_timeout: 30			
 

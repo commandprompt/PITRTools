@@ -113,7 +113,11 @@ The user who performed initdb
 
  * debug: on
 
-If you want lots of diagnostic info
+If you want the diagnostic info
+
+ * ssh_debug: on
+
+If you want lots of ssh diagnostic info
 
  * ssh_timeout: 30
 
