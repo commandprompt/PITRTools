@@ -322,9 +322,9 @@ def base_backup_func():
       exit(1)
 
    paths = get_datadirs_func()
-   if debug == 'on':
-      print "DEBUG: " +  paths
    for row in paths:
+      if debug == 'on':
+         print "DEBUG: " +  row
       row = row.rstrip('\n')
       retval = system("%s%s/ %s/" % (copy_dirs,row,row))
       if retval:
