@@ -58,6 +58,7 @@ config.read(configfile)
 # Set up our keys
 state = config.defaults()['state']
 rsync_bin = config.defaults()['rsync_bin']
+rsync_flags = config.defaults()['rsync_flags']
 slaves = config.defaults()['slaves']
 user = config.defaults()['user']
 r_archivedir = config.defaults()['r_archivedir']
@@ -231,7 +232,7 @@ def send_queue_func():
          source_or_sent = "--remove-sent-files"
       else:
          source_or_sent = "--remove-source-files"
-      queue_transfer =  """%s -azq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(rsync_bin), str(source_or_sent), str(ssh_flags), str(queue_dir), str(user), str(host), str(r_archivedir))
+      queue_transfer =  """%s %s -aq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(rsync_bin), str(rsync_flags), str(source_or_sent), str(ssh_flags), str(queue_dir), str(user), str(host), str(r_archivedir))
       retval = system(queue_transfer)
       if debug == 'on':
          print "NOTICE: Transfering queue = " + queue_transfer
@@ -306,14 +307,14 @@ def archive_func():
       if debug == 'on':
          print "NOTICE: Archiving for: " + str(host)
       if flush:
-         rsync_transfer = """%s -z %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(rsync_bin), str(pgdata), str(ssh_flags), str(user), str(host), str(r_archivedir))
+         rsync_transfer = """%s %s %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(rsync_bin), str(rsync_flags), str(pgdata), str(ssh_flags), str(user), str(host), str(r_archivedir))
          flush_check_func()
          check = check_pgpid_func()
          if check == 0:
             print "ERROR: Can not enter flush mode if PG is already running"
             exit(1)
       else:
-         rsync_transfer = """%s -zq -e "ssh %s" %s %s@%s:%s""" % (str(rsync_bin), str(ssh_flags), str(archivefile), str(user), str(host), str(r_archivedir))
+         rsync_transfer = """%s %s -q -e "ssh %s" %s %s@%s:%s""" % (str(rsync_bin), str(rsync_flags), str(ssh_flags), str(archivefile), str(user), str(host), str(r_archivedir))
       if debug == 'on':
          print "NOTICE: Shipping archive to: " + str(host)
          print "NOTICE: Using: " + rsync_transfer

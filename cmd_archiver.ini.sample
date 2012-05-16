@@ -15,6 +15,9 @@ l_archivedir: /var/lib/postgresql/archive
 ; where is rsync				
 rsync_bin: /usr/bin/rsync			
 
+; extra rsync flags
+rsync_flags: -z
+
 ; option 2 or 3, if running RHEL5 or similar it is likely 2
 ; if you are running something that ships remotely modern software
 ; it will be 3
