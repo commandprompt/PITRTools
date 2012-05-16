@@ -12,6 +12,9 @@ ssh: /usr/bin/ssh
 ; absolute path to rsync
 rsync: /usr/bin/rsync
 
+; extra rsync flags
+rsync_flags: -z
+
 ; the path to to the postgres bin		
 pg_standby: /usr/lib/postgresql/8.3/bin/pg_standby
 pg_ctl: /usr/lib/postgresql/8.3/bin/pg_ctl
