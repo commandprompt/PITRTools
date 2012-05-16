@@ -80,6 +80,7 @@ config.read(configfile)
 pgversion = config.defaults()['pgversion']
 ssh = config.defaults()['ssh']
 rsync = config.defaults()['rsync']
+rsync_flags = config.defaults()['rsync_flags']
 pgctl = config.defaults()['pg_ctl']
 psql = config.defaults()['r_psql']
 pg_standby = config.defaults()['pg_standby']
@@ -175,14 +176,14 @@ def notify_critical_func():
 # Configure some basics
 
 if debug == "on":
-   rsync_flags = "-avzl --delete --stats"
+   rsync_flags = "-avl %s --delete --stats" % (str(rsync_flags))
    pg_standby_flags = "-s5 -w0 -d -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
      pg_standby_args = "%f %p %r"
 else:
-   rsync_flags = "-azl --delete"
+   rsync_flags = "-al %s --delete" % (str(rsync_flags))
    pg_standby_flags = "-s5 -w0 -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))

@@ -83,6 +83,10 @@ The absolute path to the ssh binary.
 
 The absolute path to the rsync binary.
 
+ * rsync_flags: -z
+
+Optional flags to pass to rsync (compression, etc.)
+
  * r_psql: /usr/lib/postgresql/8.3/bin/psql
 
 The absolute path to the psql binary on the master.
