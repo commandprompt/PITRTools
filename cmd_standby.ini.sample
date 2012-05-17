@@ -59,6 +59,10 @@ postgresql_conf: /var/lib/postgresql/etc/postgresql.conf
 ; This is the pg_hba.conf to be used when not in standby
 pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf		
 
+; The recovery.conf file to create when starting up
+; Defaults to %(pgdata)/recovery.conf
+recovery_conf: /var/lib/postgresql/etc/recovery.conf
+
 ; Alarms
 
 notify_critical: ls

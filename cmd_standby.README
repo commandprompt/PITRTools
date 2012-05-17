@@ -143,6 +143,11 @@ The absolute path to the postgresql.conf to use when we failover.
 
 The absolute path to the pg_hba.conf to use when we failover.
 
+ * recovery_conf: /var/lib/postgresql/etc/recovery.conf
+
+The absolute path to the recovery.conf to create when we failover.
+This defaults to %(pgdata)/recovery.conf
+
  * notify_critical: 
  * notify_warning:
  * notify_ok:
