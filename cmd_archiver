@@ -55,10 +55,16 @@ init = options.init
 config = ConfigParser()
 config.read(configfile)
 
+def get_conf(config, key, default=""):
+   try:
+      return config.defaults()[key]
+   except KeyError, e:
+      return default
+
 # Set up our keys
 state = config.defaults()['state']
 rsync_bin = config.defaults()['rsync_bin']
-rsync_flags = config.defaults()['rsync_flags']
+rsync_flags = get_conf(config, 'rsync_flags')
 slaves = config.defaults()['slaves']
 user = config.defaults()['user']
 r_archivedir = config.defaults()['r_archivedir']
@@ -67,10 +73,10 @@ timeout = config.defaults()['timeout']
 notify_ok = config.defaults()['notify_ok']
 notify_warning = config.defaults()['notify_warning']
 notify_critical = config.defaults()['notify_critical']
-debug = config.defaults()['debug']
+debug = get_conf(config, 'debug', 'off')
 pgdata = config.defaults()['pgdata']
 rsync_version = config.defaults()['rsync_version']
-ssh_debug = config.defaults()['ssh_debug']
+ssh_debug = get_conf(config, 'ssh_debug', 'off')
 
 """
 If we are not online, exit immediately
