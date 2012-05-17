@@ -101,6 +101,7 @@ archivedir = config.defaults()['archivedir']
 pgdata = config.defaults()['pgdata']
 pgconf = config.defaults()['postgresql_conf']
 hbaconf = config.defaults()['pg_hba_conf']
+recovery_conf = get_conf(config, 'recovery_conf')
 action_failover = config.defaults()['action_failover']
 numarchives = config.defaults()['numarchives']
 
@@ -216,7 +217,10 @@ ssh_psql = ssh_connect + psql_connect
 
 
 # Recovery string for recovery.conf
-recovery_file = """%s/recovery.conf""" % (str(pgdata))
+if recovery_conf:
+   recovery_file = recovery_conf
+else:
+   recovery_file = """%s/recovery.conf""" % (str(pgdata))
 
 if failover == '999' and not recovertotime:
    recovery_string = """restore_command = 'cp %s/%%f "%%p"'""" % (str(archivedir))
