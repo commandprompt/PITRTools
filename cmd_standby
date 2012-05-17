@@ -76,19 +76,25 @@ recovertotime = options.recovertotime
 config = ConfigParser()
 config.read(configfile)
 
+def get_conf(config, key, default=""):
+   try:
+      return config.defaults()[key]
+   except KeyError, e:
+      return default
+
 # Set up our keys
 pgversion = config.defaults()['pgversion']
 ssh = config.defaults()['ssh']
 rsync = config.defaults()['rsync']
-rsync_flags = config.defaults()['rsync_flags']
+rsync_flags = get_conf(config, 'rsync_flags')
 pgctl = config.defaults()['pg_ctl']
 psql = config.defaults()['r_psql']
 pg_standby = config.defaults()['pg_standby']
 master_public_ip = config.defaults()['master_public_ip']
-master_local_ip = config.defaults()['master_local_ip']
+master_local_ip = get_conf(config, 'master_local_ip')
 user = config.defaults()['user']
-debug = config.defaults()['debug']
-ssh_debug = config.defaults()['ssh_debug']
+debug = get_conf(config, 'debug', 'off')
+ssh_debug = get_conf(config, 'ssh_debug', 'off')
 port = config.defaults()['port']
 ssh_timeout = config.defaults()['ssh_timeout']
 archivedir = config.defaults()['archivedir']
