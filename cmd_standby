@@ -217,7 +217,7 @@ copy_dirs = "%s %s --exclude=pg_log/ --exclude=postgresql.conf --exclude=pg_hba.
 ssh_psql = ssh_connect + psql_connect
 
 if no_copy_conf:
-   pgctl_base = "%s -D %s -o config_file=\"%s\"" % (str(pgctl),str(pgdata),str(pgconf))
+   pgctl_base = "%s -D %s -o \"-c config_file=%s\"" % (str(pgctl),str(pgdata),str(pgconf))
 else:
    pgctl_base = "%s -D %s" % (str(pgctl),str(pgdata))
 
