@@ -143,6 +143,13 @@ The absolute path to the postgresql.conf to use when we failover.
 
 The absolute path to the pg_hba.conf to use when we failover.
 
+ * no_copy_conf:
+
+By default postgresql.conf and pg_hba.conf will be copied from the
+locations specified above to pgdata directory on failover.  Set this
+to non-empty string to make postgres actually use the above conf files
+w/o copying them to pgdata.
+
  * recovery_conf: /var/lib/postgresql/etc/recovery.conf
 
 The absolute path to the recovery.conf to create when we failover.
