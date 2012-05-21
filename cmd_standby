@@ -385,6 +385,8 @@ def write_recovery_func():
 # Copies in production slave configurations from storage location to production pgdata location
 
 def copy_confs_func():
+   if no_copy_conf:
+      return
    try:
       shutil.copy(pgconf,pgdata)
    except Exception, e:
