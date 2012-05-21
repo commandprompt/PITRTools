@@ -101,6 +101,7 @@ archivedir = config.defaults()['archivedir']
 pgdata = config.defaults()['pgdata']
 pgconf = config.defaults()['postgresql_conf']
 hbaconf = config.defaults()['pg_hba_conf']
+no_copy_conf = get_conf(config, 'no_copy_conf')
 recovery_conf = get_conf(config, 'recovery_conf')
 action_failover = config.defaults()['action_failover']
 numarchives = config.defaults()['numarchives']
@@ -215,6 +216,10 @@ else:
 copy_dirs = "%s %s --exclude=pg_log/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (str(rsync), str(rsync_flags), str(user), str(master_public_ip))
 ssh_psql = ssh_connect + psql_connect
 
+if no_copy_conf:
+   pgctl_base = "%s -D %s -o config_file=\"%s\"" % (str(pgctl),str(pgdata),str(pgconf))
+else:
+   pgctl_base = "%s -D %s" % (str(pgctl),str(pgdata))
 
 # Recovery string for recovery.conf
 if recovery_conf:
@@ -349,7 +354,7 @@ def base_backup_func():
 # Start postgresql
 
 def start_postgresql_func():
-   retval = system("%s -D %s start" % (str(pgctl),str(pgdata)))
+   retval = system(pgctl_base + " start")
    if retval:
       print "Unable to start PostgreSQL"
       notify_warning_func()
@@ -358,7 +363,7 @@ def start_postgresql_func():
 # Stop postgresql
 
 def stop_postgresql_func():
-   retval = system("%s -D %s -m fast stop" % (str(pgctl),str(pgdata)))
+   retval = system(pgctl_base + " -m fast stop")
    if retval:
       print "Unable to stop PostgreSQL"
       notify_critical_func()
