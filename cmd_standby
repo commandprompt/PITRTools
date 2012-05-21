@@ -141,25 +141,23 @@ def check_config_func():
          exit(1)
          
 #
-# Check if our pg_xlog is a link or directory and react accordingly
+# Create pg_xlog dir if missing, follow symlink if present
 #
-
 def check_pgxlog_path_func():
    pg_xlog_dir = """%s/%s""" % (str(pgdata),str('pg_xlog'))
    pg_xlog_realpath = os.path.realpath(pg_xlog_dir) 
-   if os.path.islink(pg_xlog_dir):
+   try:
+      os.stat(pg_xlog_realpath)
+   except:
       try:
-         os.stat(pg_xlog_realpath)
-      except:
-         try:
-            os.makedirs(pg_xlog_realpath,0700)
-         except OSError, e:
-            print "ERROR: %s" % (str(e))
-            print "HINT: You may have permission problems"
-            print "Make sure that %s has the ability to create the directory %s" % ((str(user), (str(pg_xlog_realpath))))
-            exit(1)
-   else:
-      exit(0)
+         if debug == 'on':
+            print "creating pg_xlog directory: %s" % (pg_xlog_realpath)
+         os.makedirs(pg_xlog_realpath,0700)
+      except OSError, e:
+          print "ERROR: %s" % (str(e))
+          print "HINT: You may have permission problems"
+          print "Make sure that %s has the ability to create the directory %s" % ((str(user), (str(pg_xlog_realpath))))
+          exit(1)
       
 # Notifications 
 
@@ -213,7 +211,7 @@ if not master_local_ip:
 else:
    psql_connect =  """ "%s -A -t -U%s -h%s -p%s -dpostgres """ % (str(psql), str(user), str(master_local_ip), str(port))
 
-copy_dirs = "%s %s --exclude=pg_log/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (str(rsync), str(rsync_flags), str(user), str(master_public_ip))
+copy_dirs = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (str(rsync), str(rsync_flags), str(user), str(master_public_ip))
 ssh_psql = ssh_connect + psql_connect
 
 if no_copy_conf:
