@@ -70,6 +70,10 @@ pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf
 ; Defaults to %(pgdata)/recovery.conf
 recovery_conf: /var/lib/postgresql/etc/recovery.conf
 
+; Useful when postgresql.conf doesn't specify log destination
+; Will be passed with -l to pg_ctl when starting the server.
+;logfile: /var/log/postgresql/postgresql.log
+
 ; Alarms
 
 notify_critical: ls

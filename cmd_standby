@@ -103,6 +103,7 @@ pgconf = config.defaults()['postgresql_conf']
 hbaconf = config.defaults()['pg_hba_conf']
 no_copy_conf = get_conf(config, 'no_copy_conf')
 recovery_conf = get_conf(config, 'recovery_conf')
+logfile = get_conf(config, 'logfile')
 action_failover = config.defaults()['action_failover']
 numarchives = config.defaults()['numarchives']
 
@@ -214,10 +215,12 @@ else:
 copy_dirs = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (str(rsync), str(rsync_flags), str(user), str(master_public_ip))
 ssh_psql = ssh_connect + psql_connect
 
+pgctl_base = "%s -D %s" % (str(pgctl),str(pgdata))
 if no_copy_conf:
-   pgctl_base = "%s -D %s -o \"-c config_file=%s\"" % (str(pgctl),str(pgdata),str(pgconf))
-else:
-   pgctl_base = "%s -D %s" % (str(pgctl),str(pgdata))
+   pgctl_base = pgctl_base + (" \"-c config_file=%s\"" % (str(pgconf)))
+
+if logfile:
+   pgctl_base = pgctl_base + (" -l \"%s\"" % (str(logfile)))
 
 # Recovery string for recovery.conf
 if recovery_conf:

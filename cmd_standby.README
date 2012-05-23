@@ -155,6 +155,12 @@ w/o copying them to pgdata.
 The absolute path to the recovery.conf to create when we failover.
 This defaults to %(pgdata)/recovery.conf
 
+ * logfile: /var/log/postgresql/postgresql.log
+
+The absolute path to file where to append the server log (optional.)
+Useful when postgresql.conf doesn't specify log destination.  Will be
+passed with -l to pg_ctl when starting the server.
+
  * notify_critical: 
  * notify_warning:
  * notify_ok:
