@@ -217,7 +217,7 @@ ssh_psql = ssh_connect + psql_connect
 
 pgctl_base = "%s -D %s" % (str(pgctl),str(pgdata))
 if no_copy_conf:
-   pgctl_base = pgctl_base + (" \"-c config_file=%s\"" % (str(pgconf)))
+   pgctl_base = pgctl_base + (" -o \"-c config_file=%s\"" % (str(pgconf)))
 
 if logfile:
    pgctl_base = pgctl_base + (" -l \"%s\"" % (str(logfile)))
