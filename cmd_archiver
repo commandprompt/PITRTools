@@ -325,6 +325,10 @@ def archive_func():
             print "NOTICE: Using: " + rsync_transfer
          retval = system("%s" % (rsync_transfer))
          if retval:
+            if flush:
+               # don't try to enqueue the segment archived if this is a flush
+               print "FATAL: unable to flush pg_xlog to host %s" % (str(host),)
+               raise ArchiveFailure
             print "NOTICE: no luck shipping archive"
             queue_dir = l_archivedir + "/" + str(host)
             queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir))
