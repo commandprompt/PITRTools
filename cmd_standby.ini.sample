@@ -5,6 +5,22 @@ pgversion: 8.2
 ; Used for 8.2 (8.1?), should be set to something > than checkpoint_segments on master				
 numarchives: 10			
 
+; Whether or not to use streaming replication.  If this is set to "on"
+; PITRTools will configure the standby server to replicate from master
+; using streaming replication.
+; This can only be used with PostgreSQL 9.0 and up.
+use_streaming_replication: off
+
+; File to touch to end replication when using streaming replication.
+trigger_file: /var/lib/postgresql/data/cmd_end_recovery
+
+; User to connect to master DB while using streaming replication,
+; ignored if not using streaming replication.
+repl_db_user: replication
+
+; Password for the user repl_db_user.
+repl_db_password: secret
+
 ; Commands needed for execution
 ; absolute path to ssh
 ssh: /usr/bin/ssh		
