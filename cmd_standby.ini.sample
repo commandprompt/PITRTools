@@ -12,6 +12,9 @@ ssh: /usr/bin/ssh
 ; absolute path to rsync
 rsync: /usr/bin/rsync
 
+; extra rsync flags
+rsync_flags: -z
+
 ; the path to to the postgres bin		
 pg_standby: /usr/lib/postgresql/8.3/bin/pg_standby
 pg_ctl: /usr/lib/postgresql/8.3/bin/pg_ctl
@@ -36,6 +39,9 @@ user: postgres
 ; on or off			
 debug: off	 	
 
+; on or off
+ssh_debug: off
+
 ; the timeout for ssh before we throw an alarm
 ssh_timeout: 30			
 
@@ -52,6 +58,21 @@ postgresql_conf: /var/lib/postgresql/etc/postgresql.conf
 
 ; This is the pg_hba.conf to be used when not in standby
 pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf		
+
+; By default postgresql.conf and pg_hba.conf will be copied from the
+; locations specified above to pgdata directory on failover.
+;
+; Uncomment the following to make postgres actually use the above conf
+; files w/o copying them to pgdata.
+;no_copy_conf: true
+
+; The recovery.conf file to create when starting up
+; Defaults to %(pgdata)/recovery.conf
+recovery_conf: /var/lib/postgresql/etc/recovery.conf
+
+; Useful when postgresql.conf doesn't specify log destination
+; Will be passed with -l to pg_ctl when starting the server.
+;logfile: /var/log/postgresql/postgresql.log
 
 ; Alarms
 

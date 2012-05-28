@@ -76,23 +76,34 @@ recovertotime = options.recovertotime
 config = ConfigParser()
 config.read(configfile)
 
+def get_conf(config, key, default=""):
+   try:
+      return config.defaults()[key]
+   except KeyError, e:
+      return default
+
 # Set up our keys
 pgversion = config.defaults()['pgversion']
 ssh = config.defaults()['ssh']
 rsync = config.defaults()['rsync']
+rsync_flags = get_conf(config, 'rsync_flags')
 pgctl = config.defaults()['pg_ctl']
 psql = config.defaults()['r_psql']
 pg_standby = config.defaults()['pg_standby']
 master_public_ip = config.defaults()['master_public_ip']
-master_local_ip = config.defaults()['master_local_ip']
+master_local_ip = get_conf(config, 'master_local_ip')
 user = config.defaults()['user']
-debug = config.defaults()['debug']
+debug = get_conf(config, 'debug', 'off')
+ssh_debug = get_conf(config, 'ssh_debug', 'off')
 port = config.defaults()['port']
 ssh_timeout = config.defaults()['ssh_timeout']
 archivedir = config.defaults()['archivedir']
 pgdata = config.defaults()['pgdata']
 pgconf = config.defaults()['postgresql_conf']
 hbaconf = config.defaults()['pg_hba_conf']
+no_copy_conf = get_conf(config, 'no_copy_conf')
+recovery_conf = get_conf(config, 'recovery_conf')
+logfile = get_conf(config, 'logfile')
 action_failover = config.defaults()['action_failover']
 numarchives = config.defaults()['numarchives']
 
@@ -131,25 +142,23 @@ def check_config_func():
          exit(1)
          
 #
-# Check if our pg_xlog is a link or directory and react accordingly
+# Create pg_xlog dir if missing, follow symlink if present
 #
-
 def check_pgxlog_path_func():
    pg_xlog_dir = """%s/%s""" % (str(pgdata),str('pg_xlog'))
    pg_xlog_realpath = os.path.realpath(pg_xlog_dir) 
-   if os.path.islink(pg_xlog_dir):
+   try:
+      os.stat(pg_xlog_realpath)
+   except:
       try:
-         os.stat(pg_xlog_realpath)
-      except:
-         try:
-            os.makedirs(pg_xlog_realpath,0700)
-         except OSError, e:
-            print "ERROR: %s" % (str(e))
-            print "HINT: You may have permission problems"
-            print "Make sure that %s has the ability to create the directory %s" % ((str(user), (str(pg_xlog_realpath))))
-            exit(1)
-   else:
-      exit(0)
+         if debug == 'on':
+            print "creating pg_xlog directory: %s" % (pg_xlog_realpath)
+         os.makedirs(pg_xlog_realpath,0700)
+      except OSError, e:
+          print "ERROR: %s" % (str(e))
+          print "HINT: You may have permission problems"
+          print "Make sure that %s has the ability to create the directory %s" % ((str(user), (str(pg_xlog_realpath))))
+          exit(1)
       
 # Notifications 
 
@@ -174,22 +183,24 @@ def notify_critical_func():
 # Configure some basics
 
 if debug == "on":
-   ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
-   rsync_flags = "-avzl --delete --stats"
+   rsync_flags = "-avl %s --delete --stats" % (str(rsync_flags))
    pg_standby_flags = "-s5 -w0 -d -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
      pg_standby_args = "%f %p %r"
-  
 else:
-   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
-   rsync_flags = "-azl --delete"
+   rsync_flags = "-al %s --delete" % (str(rsync_flags))
    pg_standby_flags = "-s5 -w0 -c"
    if pgversion == '8.2':
      pg_standby_args = "%%f %%p -k%s" % (float(numarchives))
    else:
      pg_standby_args = "%f %p %r"
+
+if ssh_debug == "on":
+   ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
+else:
+   ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(ssh_timeout))
 
 ssh_connect = """%s %s %s@%s""" % (str(ssh), str(ssh_flags), str(user),str(master_public_ip))
 
@@ -201,12 +212,21 @@ if not master_local_ip:
 else:
    psql_connect =  """ "%s -A -t -U%s -h%s -p%s -dpostgres """ % (str(psql), str(user), str(master_local_ip), str(port))
 
-copy_dirs = "%s %s --exclude=pg_log/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (str(rsync), str(rsync_flags), str(user), str(master_public_ip))
+copy_dirs = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (str(rsync), str(rsync_flags), str(user), str(master_public_ip))
 ssh_psql = ssh_connect + psql_connect
 
+pgctl_base = "%s -D %s" % (str(pgctl),str(pgdata))
+if no_copy_conf:
+   pgctl_base = pgctl_base + (" -o \"-c config_file=%s\"" % (str(pgconf)))
+
+if logfile:
+   pgctl_base = pgctl_base + (" -l \"%s\"" % (str(logfile)))
 
 # Recovery string for recovery.conf
-recovery_file = """%s/recovery.conf""" % (str(pgdata))
+if recovery_conf:
+   recovery_file = recovery_conf
+else:
+   recovery_file = """%s/recovery.conf""" % (str(pgdata))
 
 if failover == '999' and not recovertotime:
    recovery_string = """restore_command = 'cp %s/%%f "%%p"'""" % (str(archivedir))
@@ -256,10 +276,8 @@ def get_datadirs_func():
    except Exception, e:
       print "ERROR: Unable to get data directories"
       print "HINT: Did you apply cmd_standby.sql?"
-      print "EXCEPTION: %s" % (str(e))
+      print "EXCEPTION: %s" % (str(e))   
       raise
-   if debug == 'on':    
-         print "DEBUG: " + paths
    return paths.readlines()
 
 # Start a base backup on the master
@@ -329,9 +347,9 @@ def base_backup_func():
       exit(1)
 
    paths = get_datadirs_func()
-   if debug == 'on':
-      print "DEBUG: " +  paths
    for row in paths:
+      if debug == 'on':
+         print "DEBUG: " +  row
       row = row.rstrip('\n')
       retval = system("%s%s/ %s/" % (copy_dirs,row,row))
       if retval:
@@ -346,7 +364,7 @@ def base_backup_func():
 # Start postgresql
 
 def start_postgresql_func():
-   retval = system("%s -D %s start" % (str(pgctl),str(pgdata)))
+   retval = system(pgctl_base + " start")
    if retval:
       print "Unable to start PostgreSQL"
       notify_warning_func()
@@ -355,7 +373,7 @@ def start_postgresql_func():
 # Stop postgresql
 
 def stop_postgresql_func():
-   retval = system("%s -D %s -m fast stop" % (str(pgctl),str(pgdata)))
+   retval = system(pgctl_base + " -m fast stop")
    if retval:
       print "Unable to stop PostgreSQL"
       notify_critical_func()
@@ -377,6 +395,8 @@ def write_recovery_func():
 # Copies in production slave configurations from storage location to production pgdata location
 
 def copy_confs_func():
+   if no_copy_conf:
+      return
    try:
       shutil.copy(pgconf,pgdata)
    except Exception, e:

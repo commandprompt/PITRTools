@@ -87,6 +87,11 @@ rsync_bin: /usr/bin/rsync
 Must point to the actual binary of rsync. We use rsync over ssh, so don't
 bother with an rsync server.
 
+; extra rsync flags
+rsync_flags: -z
+
+Optional flags to pass to rsync (compression, etc.)
+
 ; IP of slave					
 slaves: 192.168.3.1 or slaves: 192.168.3.1,192.168.4.1
 

@@ -83,6 +83,10 @@ The absolute path to the ssh binary.
 
 The absolute path to the rsync binary.
 
+ * rsync_flags: -z
+
+Optional flags to pass to rsync (compression, etc.)
+
  * r_psql: /usr/lib/postgresql/8.3/bin/psql
 
 The absolute path to the psql binary on the master.
@@ -113,7 +117,11 @@ The user who performed initdb
 
  * debug: on
 
-If you want lots of diagnostic info
+If you want the diagnostic info
+
+ * ssh_debug: on
+
+If you want lots of ssh diagnostic info
 
  * ssh_timeout: 30
 
@@ -134,6 +142,24 @@ The absolute path to the postgresql.conf to use when we failover.
  * pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf		
 
 The absolute path to the pg_hba.conf to use when we failover.
+
+ * no_copy_conf:
+
+By default postgresql.conf and pg_hba.conf will be copied from the
+locations specified above to pgdata directory on failover.  Set this
+to non-empty string to make postgres actually use the above conf files
+w/o copying them to pgdata.
+
+ * recovery_conf: /var/lib/postgresql/etc/recovery.conf
+
+The absolute path to the recovery.conf to create when we failover.
+This defaults to %(pgdata)/recovery.conf
+
+ * logfile: /var/log/postgresql/postgresql.log
+
+The absolute path to file where to append the server log (optional.)
+Useful when postgresql.conf doesn't specify log destination.  Will be
+passed with -l to pg_ctl when starting the server.
 
  * notify_critical: 
  * notify_warning:

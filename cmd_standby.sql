@@ -27,7 +27,7 @@ CREATE OR REPLACE FUNCTION cmd_pg_stop_backup() RETURNS INT AS $$
    SELECT 1;
 $$ LANGUAGE 'SQL';
 
-COMMENT ON FUNCTION cmd_pg_start_backup() IS 'Slim wrapper around pg_stop_backup for flexibility';
+COMMENT ON FUNCTION cmd_pg_stop_backup() IS 'Slim wrapper around pg_stop_backup for flexibility';
 
 
 
