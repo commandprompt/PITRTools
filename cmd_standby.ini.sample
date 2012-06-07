@@ -21,6 +21,11 @@ repl_db_user: replication
 ; Password for the user repl_db_user.
 repl_db_password: secret
 
+; sslmode to use when connecting for streaming replication. 
+; Accepted values: the same as libpq: disable, allow, prefer, require, verify-ca and verify-full
+; Default: sslmode: prefer
+sslmode: prefer
+
 ; Commands needed for execution
 ; absolute path to ssh
 ssh: /usr/bin/ssh		
