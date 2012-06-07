@@ -117,6 +117,7 @@ use_streaming_replication = get_conf_bool(config,'use_streaming_replication')
 trigger_file = get_conf(config,'trigger_file',"""%s/cmd_end_recovery""" % (str(pgdata)))
 repl_db_user = get_conf(config,'repl_db_user','postgres')
 repl_db_password = get_conf(config,'repl_db_password')
+sslmode = get_conf(config,'sslmode','prefer')
 
 # Validate the command line
 
@@ -250,10 +251,10 @@ elif failover == '999' and recovertotime:
    recovery_string = """restore_command = 'cp %s/%%f "%%p"'\nrecovery_target_time = '%s'""" % (str(archivedir),str(recovertotime)) 
 elif use_streaming_replication:
    if len(repl_db_password) > 0:
-      recovery_string = """standby_mode = 'on'\nprimary_conninfo = 'host=%s port=%s user=%s password=%s' \ntrigger_file = '%s' \n""" % (str(master_public_ip),str(port),str(repl_db_user),str(repl_db_password),str(trigger_file))
+      recovery_string = """standby_mode = 'on'\nprimary_conninfo = 'host=%s port=%s user=%s password=%s sslmode=%s' \ntrigger_file = '%s' \n""" % (str(master_public_ip),str(port),str(repl_db_user),str(repl_db_password),str(sslmode),str(trigger_file))
    else:
       # in this case, the password should be somewhere else.... like the .pgpass file
-      recovery_string = """standby_mode = 'on'\nprimary_conninfo = 'host=%s port=%s user=%s' \ntrigger_file = '%s' """ % (str(master_public_ip),str(port),str(repl_db_user),str(trigger_file))
+      recovery_string = """standby_mode = 'on'\nprimary_conninfo = 'host=%s port=%s user=%s sslmode=%s' \ntrigger_file = '%s' """ % (str(master_public_ip),str(port),str(repl_db_user),str(sslmode),str(trigger_file))
 else:
    recovery_string = """restore_command = '%s %s %s %s' """ % (str(pg_standby), str(pg_standby_flags), str(archivedir), str(pg_standby_args))
    
