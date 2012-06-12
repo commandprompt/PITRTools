@@ -365,6 +365,11 @@ def base_backup_func():
       if debug == 'on':
          print "DEBUG: " +  row
       row = row.rstrip('\n')
+      # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
+      if use_streaming_replication:
+         if debug == 'on':
+            print "DEBUG: cleaning up " + row + "/pg_xlog/ directory before rsync"
+         os.system("rm -rf " + row + "/pg_xlog/*")
       retval = system("%s%s/ %s/" % (copy_dirs,row,row))
       if retval:
          print
