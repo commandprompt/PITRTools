@@ -57,7 +57,7 @@ config.read(configfile)
 def get_conf(config, key, default=""):
     try:
         return config.defaults()[key]
-    except KeyError, e:
+    except KeyError:
         return default
 
 # Set up our keys
@@ -107,6 +107,7 @@ def generate_slave_list_func():
         print "NOTICE: Your slaves are: " + str(slaves)
     return slaves
 
+
 def init_env_func():
     """
     Initialize the local queues so we can check each directory for left
@@ -123,7 +124,7 @@ def init_env_func():
     except OSError, e:
         print "ERROR: Can not make queue directories"
         print "EXCEPTION: %s" % (str(e))
-        exit(1);
+        exit(1)
 
 
 def check_config_func():
@@ -147,13 +148,12 @@ def check_pgpid_func():
    """
     if debug == 'on':
         print "NOTICE: check_pgpid_func()"
-    pidfile = '%s/postmaster.pid' % (str(pgdata))
+    pidfilename = '%s/postmaster.pid' % (str(pgdata))
     try:
-        check = os.stat(pidfile)
-        if check:
-            file = open(pidfile, 'r')
-            line = int(file.readline())
-            sendsignal = os.kill(line, 0)
+        os.stat(pidfilename)
+        pidfile = open(pidfilename, 'r')
+        line = int(pidfile.readline())
+        os.kill(line, 0)
         return 0
     except:
         return 1

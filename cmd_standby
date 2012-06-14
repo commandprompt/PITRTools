@@ -78,7 +78,7 @@ config.read(configfile)
 def get_conf(config, key, default=""):
     try:
         return config.defaults()[key]
-    except KeyError, e:
+    except KeyError:
         return default
 
 # Set up our keys
@@ -163,23 +163,17 @@ def check_pgxlog_path_func():
 # Notifications
 def notify_ok_func():
     if config.defaults()['notify_ok']:
-        notify_ok = config.defaults()['notify_ok']
-    else:
-        notify_ok = None
+        pass
 
 
 def notify_warning_func():
     if config.defaults()['notify_warning']:
-        notify_warning = config.defaults()['notify_warning']
-    else:
-        notify_warning = None
+        pass
 
 
 def notify_critical_func():
     if config.defaults()['notify_critical']:
-        notify_critical = config.defaults()['notify_critical']
-    else:
-        notify_critical = None
+        pass
 
 
 # Configure some basics
@@ -413,13 +407,17 @@ def copy_confs_func():
 # Let's make sure that that postgresql is not actually running when needed
 #
 def check_pgpid_func():
-    pidfile = '%s/postmaster.pid' % (str(pgdata))
+    """
+   Checks to see if postgresql is running
+   """
+    if debug == 'on':
+        print "NOTICE: check_pgpid_func()"
+    pidfilename = '%s/postmaster.pid' % (str(pgdata))
     try:
-        check = os.stat(pidfile)
-        if check:
-            file = open(pidfile, 'r')
-            line = int(file.readline())
-        sendsignal = os.kill(line, 0)
+        os.stat(pidfilename)
+        pidfile = open(pidfilename, 'r')
+        line = int(pidfile.readline())
+        os.kill(line, 0)
         return 0
     except:
         return 1
