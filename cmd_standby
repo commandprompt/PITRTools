@@ -31,6 +31,7 @@ PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 import os
 import shutil
 import sys
+import re
 
 # before we do anything, let's just check you we are
 
@@ -81,6 +82,12 @@ def get_conf(config, key, default=""):
     except KeyError:
         return default
 
+def get_conf_bool(config, key, default=False):
+   try:
+      return config.getboolean('DEFAULT',key)
+   except KeyError, e:
+      return default
+
 # Set up our keys
 pgversion = config.defaults()['pgversion']
 ssh = config.defaults()['ssh']
@@ -105,6 +112,11 @@ recovery_conf = get_conf(config, 'recovery_conf')
 logfile = get_conf(config, 'logfile')
 action_failover = config.defaults()['action_failover']
 numarchives = config.defaults()['numarchives']
+use_streaming_replication = get_conf_bool(config,'use_streaming_replication')
+trigger_file = get_conf(config,'trigger_file',"""%s/cmd_end_recovery""" % (str(pgdata)))
+repl_db_user = get_conf(config,'repl_db_user','postgres')
+repl_db_password = get_conf(config,'repl_db_password')
+sslmode = get_conf(config,'sslmode','prefer')
 
 
 # Validate the command line
@@ -131,15 +143,17 @@ def command_line_check_func():
 
 # Let's make sure executables can be reached
 def check_config_func():
-    pathvars = [ssh, rsync, pgctl, pg_standby, archivedir, pgconf, hbaconf]
-    for element in pathvars:
-        try:
-            os.stat("%s" % (str(element)))
-        except OSError, e:
-            print "CONFIG %s:  %s" % (str(element), str(e))
-            exit(1)
-
-
+   if use_streaming_replication:
+      pathvars = [ssh,rsync,pgctl,pgconf,hbaconf]
+   else:
+      pathvars = [ssh,rsync,pgctl,pg_standby,archivedir,pgconf,hbaconf]
+   for element in pathvars:
+      try:
+         os.stat("%s" % (str(element)))
+      except OSError, e:
+         print "CONFIG %s:  %s" % (str(element),str(e))
+         exit(1)
+         
 #
 # Create pg_xlog dir if missing, follow symlink if present
 #
@@ -223,10 +237,18 @@ if recovery_conf:
 else:
     recovery_file = """%s/recovery.conf""" % (str(pgdata))
 
+recovery_stopped_file = re.sub(r'recovery.conf$','recovery.stopped',recovery_conf)
+
 if failover == '999' and not recovertotime:
     recovery_string = """restore_command = 'cp %s/%%f "%%p"'""" % (str(archivedir))
 elif failover == '999' and recovertotime:
-    recovery_string = """restore_command = 'cp %s/%%f "%%p"'\nrecovery_target_time = '%s'""" % (str(archivedir), str(recovertotime))
+   recovery_string = """restore_command = 'cp %s/%%f "%%p"'\nrecovery_target_time = '%s'""" % (str(archivedir),str(recovertotime)) 
+elif use_streaming_replication:
+   if len(repl_db_password) > 0:
+      recovery_string = """standby_mode = 'on'\nprimary_conninfo = 'host=%s port=%s user=%s password=%s sslmode=%s' \ntrigger_file = '%s' \n""" % (str(master_public_ip),str(port),str(repl_db_user),str(repl_db_password),str(sslmode),str(trigger_file))
+   else:
+      # in this case, the password should be somewhere else.... like the .pgpass file
+      recovery_string = """standby_mode = 'on'\nprimary_conninfo = 'host=%s port=%s user=%s sslmode=%s' \ntrigger_file = '%s' """ % (str(master_public_ip),str(port),str(repl_db_user),str(sslmode),str(trigger_file))
 else:
     recovery_string = """restore_command = '%s %s %s %s' """ % (str(pg_standby), str(pg_standby_flags), str(archivedir), str(pg_standby_args))
 
@@ -339,20 +361,25 @@ def base_backup_func():
         print "Unable to remove old archives"
         exit(1)
 
-    paths = get_datadirs_func()
-    for row in paths:
-        if debug == 'on':
-            print "DEBUG: " + row
-        row = row.rstrip('\n')
-        retval = system("%s%s/ %s/" % (copy_dirs, row, row))
-        if retval:
-            print
-            print "WARNING: Failed to get 0 exit status"
-            print "LOG: Check your rsync errors as this may be harmless"
-            print "LOG: File vanished: .... is ok"
-            print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
-            print
-            exit(1)
+   paths = get_datadirs_func()
+   for row in paths:
+      if debug == 'on':
+         print "DEBUG: " +  row
+      row = row.rstrip('\n')
+      # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
+      if use_streaming_replication:
+         if debug == 'on':
+            print "DEBUG: cleaning up " + row + "/pg_xlog/ directory before rsync"
+         os.system("rm -rf " + row + "/pg_xlog/*")
+      retval = system("%s%s/ %s/" % (copy_dirs,row,row))
+      if retval:
+         print
+         print "WARNING: Failed to get 0 exit status"
+         print "LOG: Check your rsync errors as this may be harmless"
+         print "LOG: File vanished: .... is ok"
+         print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
+         print
+         exit(1)
 
 
 # Start postgresql
@@ -475,16 +502,30 @@ if base_backup:
 
 # If we want to failover to the latest good transaction
 if failover == '999':
-    if not recovertotime:
-        check = check_pgpid_func()
-        if check == 0:
-            stop_postgresql_func()
-        write_recovery_func()
-        copy_confs_func()
-        start_postgresql_func()
-        failover_action_func()
-        notify_ok_func()
-
+   if not recovertotime:
+      check = check_pgpid_func()
+      if check == 0:
+         stop_postgresql_func()
+      if use_streaming_replication:
+         if check == 0:
+            # pgsql was running, just touch the trigger file and all should be good.
+            try:
+               file = open(trigger_file,"w")
+               file.close()
+            except Exception, e:
+               print "Unable to write trigger file: %s" % (str(trigger_file))
+               print "Exception: %s" % (str(e))
+               exit(1)
+         else:
+            # pgsql is NOT running, and we are trying to failover.  Lets try to rename recovery.conf into recovery.stopped and try to start pgsql.
+            os.rename(recovery_file,recovery_stopped_file)
+      else:
+         write_recovery_func()
+      copy_confs_func()
+      start_postgresql_func()
+      failover_action_func()
+      notify_ok_func()
+   
    # If we want to failover to a specific point in time
     if recovertotime:
         check = check_pgpid_func()

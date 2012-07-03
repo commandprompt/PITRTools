@@ -75,6 +75,45 @@ Only valid if pgversion is 8.2. The number of archives to keep that is
 greater than checkpoint_segments. E.g; If checkpoint_segments is 3, the 
 slave will keep 13. Not yet implemented.
 
+ * use_streaming_replication: off
+
+If set to on, the recovery.conf file generated on the standby will use
+parameters for streaming replication.  Also, the parameters trigger_file,
+repl_db_user and repl_db_password will be needed.
+
+ * trigger_file: %(pgdata)/cmd_end_recovery
+
+Is the file that the "cmd_standby -C cmd_standby.ini -F999" command would
+create in order to trigger the change from standby to master on a running
+PostgreSQL slave that is configured for streaming replication.  If you
+change this parameter you will need to update recovery.conf file or
+maybe shutdown running PostgreSQL and re-run the -S command.
+
+ * repl_db_user: postgres
+
+User that the standby will use to connect to master for replication purposes.
+
+ * repl_db_password:
+
+Password that the standby will use to connect to master for replication purposes.
+This one can be empty, if you decide to store the password on a .pgpass file.
+
+ * sslmode:
+
+sslmode to use while connecting to master server for streaming replication.
+Defaults to 'prefer', accepted values:
+
+disable : will disable SSL when connecting.
+allow : will use SSL is server require it.
+prefer : will use SSL if the server supports it.
+require : will refuse to connect if the server doesn't support SSL.
+verfiy-ca : will check server's certificate signature against certificates 
+            on ~/.postgresql/root.crt (~ = home directory of the user PostgreSQL
+            runs as).
+verify-full : In addition to CA signature on that verify-ca does, verify-full
+              will validate that the name used for connect is the same as in
+              the certificate's commonName field.
+
  * ssh: /usr/bin/ssh
 
 The absolute path to the ssh binary.
