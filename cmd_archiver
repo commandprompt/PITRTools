@@ -420,6 +420,6 @@ if __name__ == '__main__':
         init_env_func(globals)
     else:
         check_config_func(globals)
-        if debug == 'on':
+        if globals['debug'] == 'on':
             print "NOTICE: Performing standard archive"
         archive_func(globals)
