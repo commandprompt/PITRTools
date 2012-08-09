@@ -13,7 +13,7 @@ $$ LANGUAGE 'SQL' IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION cmd_get_tablespaces() RETURNS SETOF TEXT AS $$
 	SELECT DISTINCT spclocation FROM pg_catalog.pg_tablespace WHERE spclocation IS NOT NULL;
-$$ LANGUAGE 'SQL' STABLE
+$$ LANGUAGE 'SQL' STABLE;
 
 CREATE OR REPLACE FUNCTION cmd_pg_start_backup() RETURNS INT AS $$
    SELECT pg_start_backup('base_backup');
