@@ -332,7 +332,7 @@ def archive_func(globals):
         for host in slaves:
             if debug == 'on':
                 print "NOTICE: Archiving for: " + str(host)
-            if flush:
+            if globals['flush']:
                 rsync_transfer = """%s %s %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(globals['rsync_bin']), str(globals['rsync_flags']), str(globals['pgdata']), str(globals['ssh_flags']), str(globals['user']), str(host), str(globals['r_archivedir']))
                 flush_check_func(globals)
                 check = check_pgpid_func(globals)
@@ -346,7 +346,7 @@ def archive_func(globals):
                 print "NOTICE: Using: " + rsync_transfer
             retval = system("%s" % (rsync_transfer))
             if retval:
-                if flush:
+                if globals['flush']:
                     # don't try to enqueue the segment archived if this is a flush
                     print "FATAL: unable to flush pg_xlog to host %s" % (str(host),)
                     raise ArchiveFailure
