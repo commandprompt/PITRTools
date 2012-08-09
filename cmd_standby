@@ -357,19 +357,19 @@ def base_backup_func(globals):
             print "DEBUG: " + row
         row = row.rstrip('\n')
       # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
-    if globals['use_streaming_replication']:
-        if globals['debug'] == 'on':
-            print "DEBUG: cleaning up " + row + "/pg_xlog/ directory before rsync"
-        os.system("rm -rf " + row + "/pg_xlog/*")
-    retval = system("%s%s/ %s/" % (globals['copy_dirs'], row, row))
-    if retval:
-        print
-        print "WARNING: Failed to get 0 exit status"
-        print "LOG: Check your rsync errors as this may be harmless"
-        print "LOG: File vanished: .... is ok"
-        print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
-        print
-        exit(1)
+        if globals['use_streaming_replication']:
+            if globals['debug'] == 'on':
+                print "DEBUG: cleaning up " + row + "/pg_xlog/ directory before rsync"
+            os.system("rm -rf " + row + "/pg_xlog/*")
+        retval = system("%s%s/ %s/" % (globals['copy_dirs'], row, row))
+        if retval:
+            print
+            print "WARNING: Failed to get 0 exit status"
+            print "LOG: Check your rsync errors as this may be harmless"
+            print "LOG: File vanished: .... is ok"
+            print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
+            print
+            exit(1)
 
 
 # Start postgresql
