@@ -319,6 +319,9 @@ def primary_get_datadir_path(globals):
 # Start a base backup on the master
 # First we issue a checkpoint and then a start backup
 def start_backup_func(globals):
+    retval = os.system("rm -rf %s/*" % (globals['archivedir'],))
+    if retval:
+        raise Exception("Unable to remove old archives")
     success = exec_query_on_primary(globals, """ 'checkpoint' """)
     for row in success:
         row = row.rstrip('\n')
@@ -367,9 +370,6 @@ def dbinit_func(globals):
 # Takes a base backup of master. This function is tricky because
 # there is a possibility of a non 0 exit status even when successful
 def base_backup_func(globals):
-    retval = os.system("rm -rf %s/*" % (globals['archivedir'],))
-    if retval:
-        raise Exception("Unable to remove old archives")
     # first, copy tablespaces
     paths = primary_get_tablespace_paths(globals)
     for row in paths:
