@@ -117,6 +117,9 @@ def load_configuration_file(configfilename):
     result['repl_db_user'] = get_conf(config, 'repl_db_user', 'postgres')
     result['repl_db_password'] = get_conf(config, 'repl_db_password')
     result['sslmode'] = get_conf(config, 'sslmode', 'prefer')
+    result['notify_ok'] = config.defaults()['notify_ok']
+    result['notify_warning'] = config.defaults()['notify_warning']
+    result['notify_critical'] = config.defaults()['notify_critical']
     return result
 
 
