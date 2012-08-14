@@ -43,6 +43,7 @@ class RsyncFailure(Exception):
     """ Class to propagate rsync exceptions"""
     pass
 
+
 # Initiate command line switches
 def parse_commandline_arguments():
     """ Read and parse command-line arguments """
@@ -569,6 +570,7 @@ if __name__ == '__main__':
     set_ssh_options(globals)
     set_rsync_options(globals)
     set_pg_standby_options(globals)
+    set_connect_and_copy_options(globals)
     set_recovery_options(globals, options)
 
     # perform different actions depending on command-line switches
