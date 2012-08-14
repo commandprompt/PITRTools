@@ -222,7 +222,7 @@ def set_connect_and_copy_options(globals):
     # There may be a better way to do this, but I got tired of fighting.
     globals['psql_connect'] = """ "%s -A -t -U%s -p%s -dpostgres """ % (globals['psql'], globals['user'], globals['port'])
     if globals['master_local_ip']:
-        globals['pgsql_connect'] += '-h%s' % (globals['master_local_ip'],)
+        globals['psql_connect'] += '-h%s' % (globals['master_local_ip'],)
 
     globals['copy_dirs'] = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (globals['rsync'], globals['rsync_flags'], globals['user'], globals['master_public_ip'])
     globals['ssh_psql'] = globals['ssh_connect'] + globals['psql_connect']
