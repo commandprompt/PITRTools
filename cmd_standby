@@ -194,27 +194,27 @@ def notify_critical_func(globals):
 
 
 def set_ssh_options(globals):
-    globals['ssh_flags'] = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (globals['ssh_timeout'])
+    globals['ssh_flags'] = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (globals['ssh_timeout'])
     if globals['ssh_debug'] == 'on':
         globals['ssh_flags'] += '-vvv '
-    globals['ssh_connect'] = """%s %s %s@%s""" % (globals['ssh'], globals['ssh_flags'], globals['user'], globals['master_public_ip'])
+    globals['ssh_connect'] = """%s %s %s@%s """ % (globals['ssh'], globals['ssh_flags'], globals['user'], globals['master_public_ip'])
 
 
 def set_rsync_options(globals):
-    globals['rsync_flags'] = "-al %s --delete" % (globals['rsync_flags'])
+    globals['rsync_flags'] = "-al %s --delete " % (globals['rsync_flags'])
     if globals['debug'] == 'on':
-        globals['rsync_flags'] += '-v --stats'
+        globals['rsync_flags'] += '-v --stats '
 
 
 def set_pg_standby_options(globals):
-    globals['pg_standby_flags'] = '-s5 -w0 -c'
+    globals['pg_standby_flags'] = '-s5 -w0 -c '
     if globals['debug'] == 'on':
-        globals['pg_standby_flags'] += '-d'
+        globals['pg_standby_flags'] += '-d '
 
     if globals['pgversion'] == '8.2':
-        globals['pg_standby_args'] = "%%f %%p -k%s" % (float(globals['numarchives']))
+        globals['pg_standby_args'] = "%%f %%p -k%s " % (float(globals['numarchives']))
     else:
-        globals['pg_standby_args'] = "%f %p %r"
+        globals['pg_standby_args'] = "%f %p %r "
 
 
 def set_connect_and_copy_options(globals):
@@ -222,16 +222,16 @@ def set_connect_and_copy_options(globals):
     # There may be a better way to do this, but I got tired of fighting.
     globals['psql_connect'] = """ "%s -A -t -U%s -p%s -dpostgres """ % (globals['psql'], globals['user'], globals['port'])
     if globals['master_local_ip']:
-        globals['psql_connect'] += '-h%s' % (globals['master_local_ip'],)
+        globals['psql_connect'] += '-h%s ' % (globals['master_local_ip'],)
 
     globals['copy_dirs'] = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (globals['rsync'], globals['rsync_flags'], globals['user'], globals['master_public_ip'])
     globals['ssh_psql'] = globals['ssh_connect'] + globals['psql_connect']
 
-    globals['pgctl_base'] = "%s -D %s" % (globals['pgctl'], globals['pgdata'])
+    globals['pgctl_base'] = "%s -D %s " % (globals['pgctl'], globals['pgdata'])
     if globals['no_copy_conf']:
-        globals['pgctl_base'] += " -o \"-c config_file=%s\"" % (globals['pgconf'],)
+        globals['pgctl_base'] += "-o \"-c config_file=%s\" " % (globals['pgconf'],)
     if globals['logfile']:
-        globals['pgctl_base'] += " -l \"%s\"" % (globals['logfile'],)
+        globals['pgctl_base'] += "-l \"%s\" " % (globals['logfile'],)
 
 
 def set_recovery_options(globals, options):
@@ -244,18 +244,18 @@ def set_recovery_options(globals, options):
     if not globals['use_streaming_replication'] or (options.failover == '999'):
         globals['recovery_string'] = "restore_command = "
         if options.failover == '999':
-            globals['recovery_string'] += """'cp %s/%%f "%%p"'""" % (globals['archivedir'],)
+            globals['recovery_string'] += """'cp %s/%%f "%%p"' """ % (globals['archivedir'],)
             if options.recovertotime:
-                globals['recovery_string'] += """\nrecovery_target_time = '%s'""" % (options.recovertotime,)
+                globals['recovery_string'] += """\nrecovery_target_time = '%s' """ % (options.recovertotime,)
         else:
             globals['recovery_string'] += """'%s %s %s %s' """ % (globals['pg_standby'], globals['pg_standby_flags'], globals['archivedir'], globals['pg_standby_args'])
     else:
         # streaming replication and not failover, if password is not supplied
         # it's expected to be found in .pgpass or via PGPASSWORD variable.
         # see http://www.postgresql.org/docs/current/static/libpq-envars.html
-        primary_conninfo_string = "host=%s port=%s user=%s sslmode=%s" % (globals['master_public_ip'], globals['port'], globals['repl_db_user'], globals['sslmode'])
+        primary_conninfo_string = "host=%s port=%s user=%s sslmode=%s " % (globals['master_public_ip'], globals['port'], globals['repl_db_user'], globals['sslmode'])
         if len(globals['repl_db_password']) > 0:
-            primary_conninfo_string += " password=%s" % (globals['repl_db_password'],)
+            primary_conninfo_string += "password=%s " % (globals['repl_db_password'],)
         globals['recovery_string'] = """standby_mode = 'on'\nprimary_conninfo = '%s' \ntrigger_file = '%s' """ % (primary_conninfo_string, globals['trigger_file'])
 
 
