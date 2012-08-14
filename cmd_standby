@@ -193,7 +193,7 @@ def notify_critical_func(globals):
 
 
 def set_ssh_options(globals):
-    globals['ssh_flags'] = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (globals['timeout'])
+    globals['ssh_flags'] = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (globals['ssh_timeout'])
     if globals['ssh_debug'] == 'on':
         globals['ssh_flags'] += '-vvv '
     globals['ssh_connect'] = """%s %s %s@%s""" % (globals['ssh'], globals['ssh_flags'], globals['user'], globals['master_public_ip'])
