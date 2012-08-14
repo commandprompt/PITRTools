@@ -161,6 +161,7 @@ def check_config_func(globals):
 def check_pgxlog_path_func(globals):
     pg_xlog_dir = """%s/%s""" % (str(globals['pgdata']), str('pg_xlog'))
     pg_xlog_realpath = os.path.realpath(pg_xlog_dir)
+    success = True
     try:
         # XXX: we might be able to stat the directory, but still get the
         # undersired permissions (i.e no write access).
@@ -174,7 +175,10 @@ def check_pgxlog_path_func(globals):
             print "ERROR: %s" % (str(e))
             print "HINT: You may have permission problems"
             print "Make sure that %s has the ability to create the directory %s" % ((str(globals['user']), (str(pg_xlog_realpath))))
-            exit(1)
+            success = False
+        except:
+            success = False
+    return success
 
 
 # Notifications
@@ -300,7 +304,7 @@ def primary_get_tablespace_paths(globals):
 
 def primary_get_datadir_path(globals):
     try:
-        path = exec_query_on_primary(globals, """SELECT * FROM cmd_get_pgdata() LIMIT 1""")
+        path = exec_query_on_primary(globals, """'SELECT * FROM cmd_get_pgdata() LIMIT 1'""")
     except Exception, e:
         print "ERROR: Unable to get namespace paths"
         print "HINT: Did you apply cmd_standby.sql?"
@@ -320,7 +324,7 @@ def start_backup_func(globals):
         if str(row) != "CHECKPOINT":
             print "ERROR: Unable to execute CHECKPOINT"
             notify_critical_func()
-            exit(1)
+            return False
     success = exec_query_on_primary(globals, """ 'SELECT cmd_pg_start_backup()' """)
     for row in success:
         row = row.rstrip('\n')
@@ -328,7 +332,8 @@ def start_backup_func(globals):
             print "DEBUG: cmd_pg_start_backup:  " + row
         if str(row) != "1":
             print "ERROR: UNABLE to start base backup"
-            exit(1)
+            return False
+    return True
 
 
 def stop_backup_func(globals):
@@ -339,7 +344,8 @@ def stop_backup_func(globals):
             print "DEBUG: cmd_pg_stop_backup: " + row
         if str(row) != "1":
             print "ERROR: Unable to stop base backup"
-            exit(1)
+            return False
+    return True
 
 
 # Simple function to help ensure we have all paths created for postgresql
@@ -360,36 +366,26 @@ def dbinit_func(globals):
 def base_backup_func(globals):
     retval = os.system("rm -rf %s/*" % (globals['archivedir'],))
     if retval:
-        print "Unable to remove old archives"
-        exit(1)
+        raise Exception("Unable to remove old archives")
     # first, copy tablespaces
     paths = primary_get_tablespace_paths(globals)
-    try:
-        for row in paths:
-            if globals['debug'] == 'on':
-                print "DEBUG: " + row
-            row = row.rstrip('\n')
-            retval = system("%s%s/ %s/" % (globals['copy_dirs'], row, row))
-            if retval:
-                raise RsyncFailure
-        # finally, copy over pgdata
-        master_pgdata = primary_get_datadir_path(globals).strip('\n')
-        # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
-        if globals['use_streaming_replication']:
-            if globals['debug'] == 'on':
-                print "DEBUG: cleaning up " + row + "/pg_xlog/ directory before rsync"
-            os.system("rm -rf " + globals['pgdata'] + "/pg_xlog/*")
-        retval = system("%s%s/ %s/" % (globals['copy_dirs'], master_pgdata, globals['pgdata']))
+    for row in paths:
+        if globals['debug'] == 'on':
+            print "DEBUG: " + row
+        row = row.rstrip('\n')
+        retval = system("%s%s/ %s/" % (globals['copy_dirs'], row, row))
         if retval:
             raise RsyncFailure
-    except RsyncFailure:
-        print
-        print "WARNING: Failed to get 0 exit status"
-        print "LOG: Check your rsync errors as this may be harmless"
-        print "LOG: File vanished: .... is ok"
-        print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
-        print
-        exit(1)
+    # finally, copy over pgdata
+    master_pgdata = primary_get_datadir_path(globals).strip('\n')
+    # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
+    if globals['use_streaming_replication']:
+        if globals['debug'] == 'on':
+            print "DEBUG: cleaning up " + row + "/pg_xlog/ directory before rsync"
+        os.system("rm -rf " + globals['pgdata'] + "/pg_xlog/*")
+    retval = system("%s%s/ %s/" % (globals['copy_dirs'], master_pgdata, globals['pgdata']))
+    if retval:
+        raise RsyncFailure
 
 
 # Start postgresql
@@ -482,19 +478,33 @@ def failover_action_func(globals):
 
 
 def run_base_backup(globals):
-    result = False
+    result = True
     check = check_pgpid_func(globals)
     if check == 0:
         print "ERROR: Can not take base backup with PG running locally"
+        result = False
     else:
-        start_backup_func(globals)
-        base_backup_func(globals)
-        stop_backup_func(globals)
-        check_pg_xlog = check_pgxlog_path_func(globals)
-        if check_pg_xlog:
-            notify_critical_func(globals)
-        else:
-            result = True
+        if start_backup_func(globals):
+            try:
+                base_backup_func(globals)
+            except RsyncFailure:
+                print
+                print "WARNING: Failed to get 0 exit status"
+                print "LOG: Check your rsync errors as this may be harmless"
+                print "LOG: File vanished: .... is ok"
+                print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
+                print
+                result = False
+            except Exception, e:
+                print "ERROR: %s" % (str(e),)
+                result = False
+            else:
+                success = check_pgxlog_path_func(globals)
+                if not success:
+                    notify_criticalical_func(globals)
+                    result = False
+            finally:
+                stop_backup_func(globals)
     return result
 
 
