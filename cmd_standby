@@ -412,7 +412,7 @@ def stop_postgresql_func(globals):
 # Writes recovery.conf file to pgdata
 def write_recovery_func(globals):
     try:
-        file = open(recovery_file, 'w')
+        file = open(globals['recovery_file'], 'w')
         file.write('%s' % (globals['recovery_string']))
         file.close()
     except Exception, e:
