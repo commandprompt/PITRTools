@@ -266,12 +266,12 @@ def ping_check_func(globals):
         row = row.rstrip('\n')
         if globals['debug'] == 'on':
             print "DEBUG: " + row
-    if str(row) != "1":
-        print "ERROR: Processing critical alert"
-        notify_critical_func()
-        exit(1)
-    else:
-        print "SUCCESS: Master returned: %s" % (row,)
+        if str(row) != "1":
+            print "ERROR: Processing critical alert"
+            notify_critical_func()
+            exit(1)
+        else:
+            print "SUCCESS: Master returned: %s" % (row,)
         exit(0)
 
 
@@ -306,7 +306,7 @@ def primary_get_datadir_path(globals):
         print "HINT: Did you apply cmd_standby.sql?"
         print "EXCEPTION: %s" % (str(e))
         raise
-    return path
+    return path[0]
 
 
 # Start a base backup on the master
