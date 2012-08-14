@@ -272,7 +272,7 @@ def ping_check_func(globals):
             print "DEBUG: " + row
         if str(row) != "1":
             print "ERROR: Processing critical alert"
-            notify_critical_func()
+            notify_critical_func(globals)
             exit(1)
         else:
             print "SUCCESS: Master returned: %s" % (row,)
@@ -323,7 +323,7 @@ def start_backup_func(globals):
             print "DEBUG: " + row
         if str(row) != "CHECKPOINT":
             print "ERROR: Unable to execute CHECKPOINT"
-            notify_critical_func()
+            notify_critical_func(globals)
             return False
     success = exec_query_on_primary(globals, """ 'SELECT cmd_pg_start_backup()' """)
     for row in success:
@@ -402,7 +402,7 @@ def stop_postgresql_func(globals):
     retval = system(globals['pgctl_base'] + " -m fast stop")
     if retval:
         print "Unable to stop PostgreSQL"
-        notify_critical_func()
+        notify_critical_func(globals)
         exit(1)
 
 
@@ -415,7 +415,7 @@ def write_recovery_func(globals):
     except Exception, e:
         print "Unable to write recovery file: %s" % (globals['recovery_file'])
         print "Exception: %s" % (str(e))
-        notify_critical_func()
+        notify_critical_func(globals)
         exit(1)
 
 
