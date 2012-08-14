@@ -585,7 +585,7 @@ if __name__ == '__main__':
             except OSError, e:
                 print "ERROR: %s" % (str(e))
                 print "HINT: You may have permission problems"
-                print "Make sure that %s has the ability to create the directory: " % (pgdata['user'],)
+                print "Make sure that %s has the ability to create the directory: " % (globals['user'], globals['pgdata'])
                 exit(1)
 
     # Run a base backup
