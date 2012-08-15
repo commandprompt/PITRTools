@@ -146,10 +146,13 @@ def command_line_check_func(options):
 
 
 # Let's make sure executables can be reached
-def check_config_func(globals):
+def check_config_func(globals, options):
     pathvars = [globals['ssh'], globals['rsync'], globals['pgctl'], globals['pgconf'], globals['hbaconf']]
     if not globals['use_streaming_replication']:
         pathvars.extend([globals['pg_standby'], globals['archivedir']])
+    elif options.recovertotime:
+        print 'ERROR: Unable to use recovery_target_time with streaming replication'
+        exit(1)
     for element in pathvars:
         try:
             os.stat("%s" % (str(element)))
@@ -512,15 +515,16 @@ def run_base_backup(globals):
 
 
 def do_failover(globals, options):
-    if not options.recovertotime:
-        check = check_pgpid_func()
-        if check == 0:
-            stop_postgresql_func()
+    check = check_pgpid_func(globals)
+    if check == 0:
+        stop_postgresql_func(globals)
+    # Note: we already check that use_streaming_replication is not issued
+    # with recovertotime inside check_config_func.
     if globals['use_streaming_replication']:
         if check == 0:
             # pgsql was running, just touch the trigger file and all should be good.
             try:
-                file = open(trigger_file, "w")
+                file = open(globals['trigger_file'], "w")
                 file.close()
             except Exception, e:
                 print "Unable to write trigger file: %s" % (globals['trigger_file'],)
@@ -535,16 +539,6 @@ def do_failover(globals, options):
     start_postgresql_func(globals)
     failover_action_func(globals)
     notify_ok_func(globals)
-
-   # If we want to failover to a specific point in time
-    if options.recovertotime:
-        check = check_pgpid_func(globals)
-        if check == 0:
-            print "PostgreSQL is running. Bailing out"
-            return False
-        write_recovery_func(globals)
-        copy_confs_func(globals)
-        start_postgresql_func(globals)
     return True
 
 if __name__ == '__main__':
@@ -576,7 +570,7 @@ if __name__ == '__main__':
         globals[i] = cfg_vals[i]
 
     # Before we do anything, let's check the configuration
-    check_config_func(globals)
+    check_config_func(globals, options)
 
     # Configure ssh command-line string, rsync options,
     # pg_standy arguments and recovery options.
