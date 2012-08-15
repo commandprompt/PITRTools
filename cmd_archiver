@@ -33,25 +33,19 @@ from os import *
 from sys import *
 from optparse import OptionParser
 
-# Initiate command line switches
-usage = "usage: %prog [options] arg1 arg2"
-parser = OptionParser(usage=usage)
 
-parser.add_option("-F", "--file", dest="archivefilename", action="store", help="Archive file", metavar="FILE")
-parser.add_option("-C", "--config", dest="configfilename", action="store",  help="the name of the archiver config file", metavar="FILE")
-parser.add_option("-f", "--flush", dest="flush", action="store_true", help="Flush all remaining archives to slave")
-parser.add_option("-I", "--init", dest="init", action="store_true", help="Initialize master environment")
+def parse_commandline_arguments():
+    """ Read and parse command-line arguments """
+    usage = "usage: %prog [options] arg1 arg2"
+    parser = OptionParser(usage=usage)
 
-(options, args) = parser.parse_args()
+    parser.add_option("-F", "--file", dest="archivefilename", action="store", help="Archive file", metavar="FILE")
+    parser.add_option("-C", "--config", dest="configfilename", action="store",  help="the name of the archiver config file", metavar="FILE", default='cmd_archiver.ini')
+    parser.add_option("-f", "--flush", dest="flush", action="store_true", help="Flush all remaining archives to slave")
+    parser.add_option("-I", "--init", dest="init", action="store_true", help="Initialize master environment")
 
-archivefile = options.archivefilename
-configfile = options.configfilename
-flush = options.flush
-init = options.init
-
-# initiate config parser
-config = ConfigParser()
-config.read(configfile)
+    (options, args) = parser.parse_args()
+    return (options, args)
 
 
 def get_conf(config, key, default=""):
@@ -60,63 +54,82 @@ def get_conf(config, key, default=""):
     except KeyError:
         return default
 
-# Set up our keys
-state = config.defaults()['state']
-rsync_bin = config.defaults()['rsync_bin']
-rsync_flags = get_conf(config, 'rsync_flags')
-slaves = config.defaults()['slaves']
-user = config.defaults()['user']
-r_archivedir = config.defaults()['r_archivedir']
-l_archivedir = config.defaults()['l_archivedir']
-timeout = config.defaults()['timeout']
-notify_ok = config.defaults()['notify_ok']
-notify_warning = config.defaults()['notify_warning']
-notify_critical = config.defaults()['notify_critical']
-debug = get_conf(config, 'debug', 'off')
-pgdata = config.defaults()['pgdata']
-rsync_version = config.defaults()['rsync_version']
-ssh_debug = get_conf(config, 'ssh_debug', 'off')
+
+def load_configuration_file(configfilename):
+    """
+        Load global settings from configuration file, applying default
+        values when necessary
+    """
+    result = dict()
+    # initiate config parser
+    config = ConfigParser()
+    files = config.read(configfilename)
+    if not files:
+        raise Exception('Configuration file %s is empty or not found' % (configfilename,))
+    # Set up our keys
+    result['state'] = config.defaults()['state']
+    result['rsync_bin'] = config.defaults()['rsync_bin']
+    result['rsync_flags'] = get_conf(config, 'rsync_flags')
+    result['slaves'] = config.defaults()['slaves']
+    result['user'] = config.defaults()['user']
+    result['r_archivedir'] = config.defaults()['r_archivedir']
+    result['l_archivedir'] = config.defaults()['l_archivedir']
+    result['timeout'] = config.defaults()['timeout']
+    result['notify_ok'] = config.defaults()['notify_ok']
+    result['notify_warning'] = config.defaults()['notify_warning']
+    result['notify_critical'] = config.defaults()['notify_critical']
+    result['debug'] = get_conf(config, 'debug', 'off')
+    result['pgdata'] = config.defaults()['pgdata']
+    result['pgcontroldata'] = get_conf(config, 'pgcontroldata')
+    # XXX: can't we just call rsync --version?
+    result['rsync_version'] = config.defaults()['rsync_version']
+    result['ssh_debug'] = get_conf(config, 'ssh_debug', 'off')
+    return result
 
 
 class ArchiveFailure(Exception):
     """ Class to propagate archiving failures """
     pass
 
-"""
-If we are not online, exit immediately
-"""
 
-if state != 'online':
-    print "ARCHIVER: We are offline, queuing archives"
-    system("%s" % (str(notify_warning)))
-    exit(1)
+def notify_external(globals, ok=False, warning=False, critical=False, message=None):
+    """
+    Notify some external program (i.e. monitoring plugin) about an event occured.
+    The program itself can be set via notify_* configuration options.
+    """
+    if ok:
+        exec_str = "%s" % (globals['notify_ok'],)
+    elif warning:
+        exec_str = "%s" % (globals['notify_warning'],)
+    elif critical:
+        exec_str = "%s" % (globals['notify_critical'],)
+    if message:
+        exec_str += " %s" % (message,)
+    if ok or warning or critical:
+        system(exec_str)
 
 
-def generate_slave_list_func():
+def generate_slave_list_func(globals):
     """
     We now support multiple slaves (see the README) in order do that properly
     we have to break up the string and turn it into a list
     """
-
-    slaves = config.defaults()['slaves']
-    s = str(slaves)
-    s.replace("'", "")
-    slaves = s.split(",")
-    if debug == 'on':
+    slaves = str(globals['slaves']).replace("'", "").split(",")
+    if globals['debug'] == 'on':
         print "NOTICE: generate_slave_list_func()"
         print "NOTICE: Your slaves are: " + str(slaves)
     return slaves
 
 
-def init_env_func():
+def init_env_func(globals):
     """
     Initialize the local queues so we can check each directory for left
     over files
     """
-    if debug == 'on':
+    if globals['debug'] == 'on':
         print "NOTICE: init_env_func()"
-    l_archivedir = config.defaults()['l_archivedir']
-    queues = generate_slave_list_func()
+    l_archivedir = globals['l_archivedir']
+    queues = generate_slave_list_func(globals)
     try:
         for host in queues:
             queue = l_archivedir + "/" + host
@@ -127,13 +140,13 @@ def init_env_func():
         exit(1)
 
 
-def check_config_func():
+def check_config_func(globals):
     """
     Let's make sure that our directories and executables exist
     """
-    if debug == 'on':
+    if globals['debug'] == 'on':
         print "NOTICE: check_config_func()"
-    pathvars = [rsync_bin, pgdata, configfile]
+    pathvars = [globals['rsync_bin'], globals['pgdata'], globals['l_archivedir']]
     for element in pathvars:
         try:
             os.stat("%s" % (str(element)))
@@ -142,13 +155,13 @@ def check_config_func():
             exit(1)
 
 
-def check_pgpid_func():
+def check_pgpid_func(globals):
     """
    Checks to see if postgresql is running
    """
-    if debug == 'on':
+    if globals['debug'] == 'on':
         print "NOTICE: check_pgpid_func()"
-    pidfilename = '%s/postmaster.pid' % (str(pgdata))
+    pidfilename = '%s/postmaster.pid' % (str(globals['pgdata']))
     try:
         os.stat(pidfilename)
         pidfile = open(pidfilename, 'r')
@@ -159,14 +172,18 @@ def check_pgpid_func():
         return 1
 
 
-def get_pgcontroldata_func():
+def get_pgcontroldata_func(globals):
     """
     get_pgcontroldata_func doesn't actually do anything yet. This is more
     for archival purposes so we can remember the regex
     """
-
+    if not 'pgcontroldata' in globals or not globals['pgcontroldata']:
+        print 'WARNING: path to pg_controldata utility is not set, assuming it\'s in PATH'
+        pgcontroldata = 'pg_controldata'
+    else:
+        pgcontroldata = globals['pgcontroldata']
     try:
-        cmd = os.popen("%s %s" % (str(pgcontroldata), str(pgdata)))
+        cmd = os.popen("%s %s" % (str(pgcontroldata), str(globals['pgdata'])))
         #return cmd.readlines
         for row in cmd:
             match = re.search('^Prior checkpoint location: *.{1,}', '%s' % (str(row)))
@@ -178,11 +195,11 @@ def get_pgcontroldata_func():
         exit(1)
 
 
-def flush_check_func():
+def flush_check_func(globals):
     """
     Simple function to make sure we require input before flushing a system
     """
-    if debug == 'on':
+    if globals['debug'] == 'on':
         print "NOTICE: flush_check_func()"
     print "\n\n"
     print "Warning! Flushing all logs will cause your slave to exit"
@@ -193,73 +210,73 @@ def flush_check_func():
     line = str(raw_input())
     if line == "Yes":
         print "Flushing all xlogs"
+        return
     elif line == "No":
         print "Exiting!"
-        exit(0)
     else:
         print "Your options are Yes and No"
-        exit(0)
+    exit(0)
 
 
-def list_queue_func():
+def list_queue_func(globals):
     """
     We only want to process archives for queues that have files, so we check
     and only return a queue/slave that has files to be shipped.
     """
-    if debug == 'on':
+    if globals['debug'] == 'on':
         print "NOTICE: list_queue_func()"
       # Empty host array
     hosts = []
    # Loop through the list of slaves
-    for host in generate_slave_list_func():
-        queuedir = l_archivedir + "/" + str(host)
+    for host in generate_slave_list_func(globals):
+        queuedir = globals['l_archivedir'] + "/" + str(host)
         list_archives = os.listdir(queuedir)
-        # If there is an archive directory, then we're good.
+        # If an archive directory is not empty, then we're good.
         if list_archives:
          # add to list of hosts
             hosts.append(host)
-            if debug == 'on':
+            if globals['debug'] == 'on':
                 for host in generate_slave_list_func():
                     print "NOTICE: SLAVE: " + host + " " + str(list_archives)
     return hosts
 
 
-def send_queue_func():
+def send_queue_func(globals):
     """
     We are called before normal archive process in order to send queue files
     that have not been shipped yet. If we have to transfer and we error we
     return the slave that failed.
     """
-   # Olek's fix
+    debug = globals['debug']
     rtn = []
     if debug == 'on':
         print "NOTICE: send_queue_func()"
-    for host in list_queue_func():
+    for host in list_queue_func(globals):
         if debug == 'on':
             print "NOTICE: Host = " + host
-        queue_dir = l_archivedir + "/" + str(host)
+        queue_dir = globals['l_archivedir'] + "/" + str(host)
         if debug == 'on':
             print "NOTICE: queue_dir = " + queue_dir
         # To deal with old versions of rsync
-        if rsync_version == '2':
+        if globals['rsync_version'] == '2':
             if debug == 'on':
-                print "NOTICE: rsync_version = " + rsync_version
+                print "NOTICE: rsync_version = " + globals['rsync_version']
             source_or_sent = "--remove-sent-files"
         else:
             source_or_sent = "--remove-source-files"
-        queue_transfer = """%s %s -aq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(rsync_bin), str(rsync_flags), str(source_or_sent), str(ssh_flags), str(queue_dir), str(user), str(host), str(r_archivedir))
+        queue_transfer = """%s %s -aq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(globals['rsync_bin']), str(globals['rsync_flags']), str(source_or_sent), str(globals['ssh_flags']), str(queue_dir), str(globals['user']), str(host), str(globals['r_archivedir']))
         retval = system(queue_transfer)
         if debug == 'on':
             print "NOTICE: Transfering queue = " + queue_transfer
             print "NOTICE: Transfer retval = " + str(retval)
         if retval:
-            # Olek's fix
-            #return host
+            # If we failed to send data to this host - append it to the list
+            # of hosts to retry the sending attempt on
             rtn.append(host)
     return rtn
 
 
-def archive_func():
+def archive_func(globals):
     """
     The main archive function.
     First we check the queue. If there are files in the queue we try to send
@@ -269,17 +286,18 @@ def archive_func():
     can not send files. The archiver then automatically queues all logs for
     those slaves which are not sending until they can send.
     """
+    debug = globals['debug']
     if debug == 'on':
         print "NOTICE: archive_func()"
     try:
+        slaves = generate_slave_list_func(globals)
         # First we send the queue files (if any). If we can't we exit
-        queue = send_queue_func()
+        queue = send_queue_func(globals)
         if queue:
             if debug == 'on':
                 print "NOTICE: queue = " + str(queue)
                 print "ERROR: Unable to send queued archived files, queueing"
-            system("%s" % (str(notify_warning)))
-            slaves = generate_slave_list_func()
+            system("%s" % (str(globals['notify_warning'])))
             if debug == 'on':
                 print "NOTICE: slaves = generate_slave_list_func() " + str(slaves)
             for host in slaves:
@@ -290,16 +308,16 @@ def archive_func():
             if host in queue:
                 if debug == 'on':
                     print "NOTICE: Saving archives to queue"
-                queue_dir = l_archivedir + "/" + str(host)
-                queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir))
+                queue_dir = globals['l_archivedir'] + "/" + str(host)
+                queue_transfer = """%s %s %s""" % (str(globals['rsync_bin']), str(globals['archivefile']), str(queue_dir))
                 retval = system(queue_transfer)
                 if retval:
-                    system("%s %d" % (str(notify_critical), retval))
+                    system("%s %d" % (str(globals['notify_critical']), retval))
                     raise ArchiveFailure
                 else:
                     if debug == 'on':
                         print "NOTICE: Sending OK alert"
-                    system("%s %d" % (str(notify_ok), retval))
+                    system("%s %d" % (str(globals['notify_ok']), retval))
         # If the host returned is not in the list, we attempt to
         # archive normally. If we can not, we archive to the queue. If we
         # can not archive to the queue, we exit critical.
@@ -311,41 +329,41 @@ def archive_func():
         # the missing files and pg_standby will correctly restore them.
         if debug == 'on':
             print "NOTICE: Entering single file archive transfer"
-        for host in generate_slave_list_func():
+        for host in slaves:
             if debug == 'on':
                 print "NOTICE: Archiving for: " + str(host)
-            if flush:
-                rsync_transfer = """%s %s %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(rsync_bin), str(rsync_flags), str(pgdata), str(ssh_flags), str(user), str(host), str(r_archivedir))
-                flush_check_func()
-                check = check_pgpid_func()
+            if globals['flush']:
+                rsync_transfer = """%s %s %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(globals['rsync_bin']), str(globals['rsync_flags']), str(globals['pgdata']), str(globals['ssh_flags']), str(globals['user']), str(host), str(globals['r_archivedir']))
+                flush_check_func(globals)
+                check = check_pgpid_func(globals)
                 if check == 0:
                     print "ERROR: Can not enter flush mode if PG is already running"
                     raise ArchiveFailure
             else:
-                rsync_transfer = """%s %s -q -e "ssh %s" %s %s@%s:%s""" % (str(rsync_bin), str(rsync_flags), str(ssh_flags), str(archivefile), str(user), str(host), str(r_archivedir))
+                rsync_transfer = """%s %s -q -e "ssh %s" %s %s@%s:%s""" % (str(globals['rsync_bin']), str(globals['rsync_flags']), str(globals['ssh_flags']), str(globals['archivefile']), str(globals['user']), str(host), str(globals['r_archivedir']))
             if debug == 'on':
                 print "NOTICE: Shipping archive to: " + str(host)
                 print "NOTICE: Using: " + rsync_transfer
             retval = system("%s" % (rsync_transfer))
             if retval:
-                if flush:
+                if globals['flush']:
                     # don't try to enqueue the segment archived if this is a flush
                     print "FATAL: unable to flush pg_xlog to host %s" % (str(host),)
                     raise ArchiveFailure
                 print "NOTICE: no luck shipping archive"
-                queue_dir = l_archivedir + "/" + str(host)
-                queue_transfer = """%s %s %s""" % (str(rsync_bin), str(archivefile), str(queue_dir))
+                queue_dir = globals['l_archivedir'] + "/" + str(host)
+                queue_transfer = """%s %s %s""" % (str(globals['rsync_bin']), str(globals['archivefile']), str(globals['queue_dir']))
                 retval = system(queue_transfer)
                 if retval:
                     print "FATAL: Unabled to rsync_transfer or queue_transfer"
-                    system("%s %d" % (str(notify_critical), retval))
+                    system("%s %d" % (str(globals['notify_critical']), retval))
                     raise ArchiveFailure
                 else:
-                    retval = system("%s %d" % (str(notify_warning), retval))
+                    retval = system("%s %d" % (str(globals['notify_warning']), retval))
             else:
                 if debug == 'on':
                     print "NOTICE: Sending OK alert"
-                system("%s %d" % (str(notify_ok), retval))
+                system("%s %d" % (str(globals['notify_ok']), retval))
     except ArchiveFailure:
         # archiver process was unable to archive the wal segment
         exit(1)
@@ -359,17 +377,49 @@ def archive_func():
 
 
 # set up our transfer commands
-if ssh_debug == 'on':
-    ssh_flags = "-vvv -o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(timeout))
-else:
-    ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (str(timeout))
+def set_ssh_flags(globals):
+    globals['ssh_flags'] = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (str(globals['timeout']))
+    if globals['ssh_debug'] == 'on':
+        globals['ssh_flags'] += '-vvv '
 
-# Actually run
-if init:
-    print "We are initializing queues, one moment.\n"
-    init_env_func()
-else:
-    check_config_func()
-    if debug == 'on':
-        print "NOTICE: Performing standard archive"
-    archive_func()
+if __name__ == '__main__':
+
+    globals = dict()
+    # before we do anything, let's just check you we are
+    if os.geteuid() == 0:
+        sys.exit("\nBad Mojo... no root access for this script\n")
+
+    (options, args) = parse_commandline_arguments()
+    configfilename = options.configfilename
+    init = options.init
+
+    globals['archivefile'] = options.archivefilename
+    globals['flush'] = options.flush
+
+    try:
+        cfg_vals = load_configuration_file(configfilename)
+    except Exception, e:
+        print "ERROR: %s" % (e,)
+        exit(2)
+
+    # copy values obtained from config file to globals
+    for i in cfg_vals:
+        globals[i] = cfg_vals[i]
+
+    #If we are not online, exit immediately
+    if globals['state'] != 'online':
+        print "ARCHIVER: We are offline, queuing archives"
+        system("%s" % (str(globals['notify_warning'])))
+        exit(1)
+
+    set_ssh_flags(globals)
+
+    # Actually run
+    if init:
+        print "We are initializing queues, one moment.\n"
+        init_env_func(globals)
+    else:
+        check_config_func(globals)
+        if globals['debug'] == 'on':
+            print "NOTICE: Performing standard archive"
+        archive_func(globals)
