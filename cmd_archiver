@@ -50,7 +50,7 @@ classdict = (('state', 's', None),
             ('user', 's', None),
             ('r_archivedir', 's', None),
             ('l_archivedir', 's', None),
-            ('timeout', 'i', None),
+            ('ssh_timeout', 'i', None),
             ('notify_ok', 's', None),
             ('notify_warning', 's', None),
             ('notify_critical', 's', None),
@@ -74,7 +74,7 @@ class CMDArchiver(CMDWorker):
         we have to break up the string and turn it into a list
         """
         slaves = str(self.slaves).replace("'", "").split(",")
-        if self.debug == 'on':
+        if self.debug:
             print "NOTICE: generate_slave_list_func()"
             print "NOTICE: Your slaves are: " + str(slaves)
         return slaves
@@ -84,7 +84,7 @@ class CMDArchiver(CMDWorker):
         Initialize the local queues so we can check each directory for left
         over files
         """
-        if self.debug == 'on':
+        if self.debug:
             print "NOTICE: init_env_func()"
         l_archivedir = self.l_archivedir
         queues = self.generate_slave_list_func()
@@ -101,7 +101,7 @@ class CMDArchiver(CMDWorker):
         """
         Let's make sure that our directories and executables exist
         """
-        if self.debug == 'on':
+        if self.debug:
             print "NOTICE: check_config_func()"
         pathvars = [self.rsync_bin, self.pgdata, self.l_archivedir]
         for element in pathvars:
@@ -137,7 +137,7 @@ class CMDArchiver(CMDWorker):
         """
         Simple function to make sure we require input before flushing a system
         """
-        if self.debug == 'on':
+        if self.debug:
             print "NOTICE: flush_check_func()"
         print "\n\n"
         print "Warning! Flushing all logs will cause your slave to exit"
@@ -160,7 +160,7 @@ class CMDArchiver(CMDWorker):
         We only want to process archives for queues that have files, so we check
         and only return a queue/slave that has files to be shipped.
         """
-        if self.debug == 'on':
+        if self.debug:
             print "NOTICE: list_queue_func()"
           # Empty host array
         hosts = []
@@ -172,7 +172,7 @@ class CMDArchiver(CMDWorker):
             if list_archives:
              # add to list of hosts
                 hosts.append(host)
-                if self.debug == 'on':
+                if self.debug:
                     for host in self.generate_slave_list_func():
                         print "NOTICE: SLAVE: " + host + " " + str(list_archives)
         return hosts
@@ -183,26 +183,25 @@ class CMDArchiver(CMDWorker):
         that have not been shipped yet. If we have to transfer and we error we
         return the slave that failed.
         """
-        debug = self.debug
         rtn = []
-        if debug == 'on':
+        if self.debug:
             print "NOTICE: send_queue_func()"
         for host in self.list_queue_func():
-            if debug == 'on':
+            if self.debug:
                 print "NOTICE: Host = " + host
             queue_dir = self.l_archivedir + "/" + str(host)
-            if debug == 'on':
+            if self.debug:
                 print "NOTICE: queue_dir = " + queue_dir
             # To deal with old versions of rsync
-            if self.rsync_version == '2':
-                if debug == 'on':
-                    print "NOTICE: rsync_version = " + self.rsync_version
+            if self.rsync_version == 2:
+                if self.debug:
+                    print "NOTICE: rsync_version = " + str(self.rsync_version)
                 source_or_sent = "--remove-sent-files"
             else:
                 source_or_sent = "--remove-source-files"
             queue_transfer = """%s %s -aq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(self.rsync_bin), str(self.rsync_flags), str(source_or_sent), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
             retval = system(queue_transfer)
-            if debug == 'on':
+            if self.debug:
                 print "NOTICE: Transfering queue = " + queue_transfer
                 print "NOTICE: Transfer retval = " + str(retval)
             if retval:
@@ -221,44 +220,42 @@ class CMDArchiver(CMDWorker):
         can not send files. The archiver then automatically queues all logs for
         those slaves which are not sending until they can send.
         """
-        debug = self.debug
-        if debug == 'on':
+        if self.debug:
             print "NOTICE: Performing standard archive"
 
         #If we are not online, exit immediately
         if self.state != 'online':
-            print "ARCHIVER: We are offline, queuing archives"
-            system("%s" % (str(self.notify_warning)))
+            print "We are offline, queuing archives"
+            self.notify_external(warning=True, message="ARCHIVER: We are offline, queuing archives")
             exit(1)
         try:
             slaves = self.generate_slave_list_func()
             # First we send the queue files (if any). If we can't we exit
             queue = self.send_queue_func()
             if queue:
-                if debug == 'on':
+                if self.debug:
                     print "NOTICE: queue = " + str(queue)
                     print "ERROR: Unable to send queued archived files, queueing"
-                system("%s" % (str(self.notify_warning)))
-                if debug == 'on':
                     print "NOTICE: slaves = generate_slave_list_func() " + str(slaves)
+                    self.notify_external(warning=True, message="Unable to send queued archived files, queueing")
                 for host in slaves:
-                    if debug == 'on':
+                    if self.debug:
                         print "NOTICE: " + host + " in " + str(slaves)
                 # If the host returned is in the list, we automatically
                 # archive to the queue.
                 if host in queue:
-                    if debug == 'on':
+                    if self.debug:
                         print "NOTICE: Saving archives to queue"
                     queue_dir = self.l_archivedir + "/" + str(host)
                     queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(queue_dir))
                     retval = system(queue_transfer)
                     if retval:
-                        system("%s %d" % (str(self.notify_critical), retval))
+                        self.notify_external(critical=True, message=str(retval))
                         raise ArchiveFailure
                     else:
-                        if debug == 'on':
+                        if self.debug:
                             print "NOTICE: Sending OK alert"
-                        system("%s %d" % (str(self.notify_ok), retval))
+                        self.notify_external(ok=True, message=str(retval))
             # If the host returned is not in the list, we attempt to
             # archive normally. If we can not, we archive to the queue. If we
             # can not archive to the queue, we exit critical.
@@ -268,10 +265,10 @@ class CMDArchiver(CMDWorker):
             # transfer. This is not a problem because pg_standby will only restore
             # files in order, so on the next queue check the slave will receive
             # the missing files and pg_standby will correctly restore them.
-            if debug == 'on':
+            if self.debug:
                 print "NOTICE: Entering single file archive transfer"
             for host in slaves:
-                if debug == 'on':
+                if self.debug:
                     print "NOTICE: Archiving for: " + str(host)
                 if self.flush:
                     rsync_transfer = """%s %s %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.pgdata), str(self.ssh_flags), str(self.user), str(host), str(self.r_archivedir))
@@ -282,7 +279,7 @@ class CMDArchiver(CMDWorker):
                         raise ArchiveFailure
                 else:
                     rsync_transfer = """%s %s -q -e "ssh %s" %s %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.ssh_flags), str(self.archivefile), str(self.user), str(host), str(self.r_archivedir))
-                if debug == 'on':
+                if self.debug:
                     print "NOTICE: Shipping archive to: " + str(host)
                     print "NOTICE: Using: " + rsync_transfer
                 retval = system("%s" % (rsync_transfer))
@@ -296,15 +293,15 @@ class CMDArchiver(CMDWorker):
                     queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(self.queue_dir))
                     retval = system(queue_transfer)
                     if retval:
-                        print "FATAL: Unabled to rsync_transfer or queue_transfer"
-                        system("%s %d" % (str(self.notify_critical), retval))
+                        print "FATAL: Unable to rsync_transfer or queue_transfer"
+                        self.notify_external(critical=True, message=str(retval))
                         raise ArchiveFailure
                     else:
-                        retval = system("%s %d" % (str(self.notify_warning), retval))
+                        self.notify_external(warning=True, message=str(retval))
                 else:
-                    if debug == 'on':
+                    if self.debug:
                         print "NOTICE: Sending OK alert"
-                    system("%s %d" % (str(self.notify_ok), retval))
+                    self.notify_external(ok=True, message=str(retval))
         except ArchiveFailure:
             # archiver process was unable to archive the wal segment
             exit(1)
@@ -315,12 +312,6 @@ class CMDArchiver(CMDWorker):
         else:
             # WAL segment successfully archived or queued
             exit(0)
-
-# set up our transfer commands
-    def set_ssh_flags(self):
-        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (str(self.timeout))
-        if self.ssh_debug == 'on':
-            self.ssh_flags += '-vvv '
 
 if __name__ == '__main__':
 

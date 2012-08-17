@@ -33,10 +33,51 @@ import shutil
 import sys
 import re
 
-from ConfigParser import *
 from sys import *
-from optparse import OptionParser
 from os import system
+from cmd_worker import CMDWorker
+
+
+argslist = (("-A", "--action", dict(dest="pgctl_action", action="store", help="Start/Stop PostgreSQL", metavar="start|stop|stop_basebackup")),
+            ("-B", "--basebackup", dict(dest="base_backup", action="store_true", help="Start a base backup", metavar="FILE")),
+            ("-C", "--config", dict(dest="configfilename", action="store", help="Name of the archiver config file", metavar="FILE", default='cmd_standby.ini')),
+            ("-F", "--failover", dict(dest="failover", action="store", help="If you are serious, set -F999", metavar="VALUE")),
+            ("-I", "--dbinit", dict(dest="dbinit", action="store_true", help="Use before -B", metavar="FILE")),
+            ("-P", "--ping", dict(dest="ping_check", action="store_true", help="Is my master alive?", metavar="FILE")),
+            ("-R", "--recovertotime", dict(dest="recovertotime", action="store", help="To restore to a specific point in time", metavar="TIMESTAMP")),
+            ("-S", "--standby", dict(dest="standby", action="store_true", help="Enter standby mode", metavar="FILE")))
+
+classdict = (('pgversion', 's', None),
+           ('ssh', 's', None),
+           ('rsync', 's', None),
+           ('rsync_flags', 's', ""),
+           ('pg_ctl', 's', None),
+           ('r_psql', 's', None),
+           ('pg_standby', 's', None),
+           ('master_public_ip', 's', None),
+           ('master_local_ip', 's', ""),
+           ('user', 's', None),
+           ('debug', 'b', False),
+           ('ssh_debug', 'b', False),
+           ('port', 'i', None),
+           ('ssh_timeout', 'i', None),
+           ('archivedir', 's', None),
+           ('pgdata', 's', None),
+           ('postgresql_conf', 's', None),
+           ('pg_hba_conf', 's', None),
+           ('no_copy_conf', 'b', False),
+           ('recovery_conf', 's', None),
+           ('logfile', 's', ""),
+           ('action_failover', 's', None),
+           ('numarchives', 'i', None),
+           ('use_streaming_replication', 's', None),
+           ('trigger_file', 's', ""),
+           ('repl_db_user', 's', 'postgres'),
+           ('repl_db_password', 's', ""),
+           ('sslmode', 's', 'prefer'),
+           ('notify_ok', 's', None),
+           ('notify_warning', 's', None),
+           ('notify_critical', 's', None))
 
 
 class RsyncFailure(Exception):
@@ -44,515 +85,383 @@ class RsyncFailure(Exception):
     pass
 
 
-# Initiate command line switches
-def parse_commandline_arguments():
-    """ Read and parse command-line arguments """
-    usage = "usage: %prog [options] arg1 arg2"
-    parser = OptionParser(usage=usage)
+class CMDStandby(CMDWorker):
 
-    parser.add_option("-A", "--action", dest="pgctl_action", action="store", help="Start/Stop PostgreSQL", metavar="start|stop|stop_basebackup")
-    parser.add_option("-B", "--basebackup", dest="base_backup", action="store_true", help="Start a base backup", metavar="FILE")
-    parser.add_option("-C", "--config", dest="configfilename", action="store", help="Name of the archiver config file", metavar="FILE", default='cmd_standby.ini')
-    parser.add_option("-F", "--failover", dest="failover", action="store", help="If you are serious, set -F999", metavar="VALUE")
-    parser.add_option("-I", "--dbinit", dest="dbinit", action="store_true", help="Use before -B", metavar="FILE")
-    parser.add_option("-P", "--ping", dest="ping_check", action="store_true", help="Is my master alive?", metavar="FILE")
-    parser.add_option("-R", "--recovertotime", dest="recovertotime", action="store", help="To restore to a specific point in time", metavar="TIMESTAMP")
-    parser.add_option("-S", "--standby", dest="standby", action="store_true", help="Enter standby mode", metavar="FILE")
-
-    (options, args) = parser.parse_args()
-    return (options, args)
-
-
-def get_conf(config, key, default=""):
-    try:
-        return config.defaults()[key]
-    except KeyError:
-        return default
-
-
-def get_conf_bool(config, key, default=False):
-    try:
-        return config.getboolean('DEFAULT', key)
-    except KeyError:
-        return default
-
-
-def load_configuration_file(configfilename):
-    """
-        Load global settings from configuration file, applying default
-        values when necessary
-    """
-    result = dict()
-    # initiate config parser
-    config = ConfigParser()
-    files = config.read(configfilename)
-    if not files:
-        raise Exception('Configuration file %s is empty or not found' % (configfilename,))
-    # Set up our keys
-    result['pgversion'] = config.defaults()['pgversion']
-    result['ssh'] = config.defaults()['ssh']
-    result['rsync'] = config.defaults()['rsync']
-    result['rsync_flags'] = get_conf(config, 'rsync_flags')
-    result['pgctl'] = config.defaults()['pg_ctl']
-    result['psql'] = config.defaults()['r_psql']
-    result['pg_standby'] = config.defaults()['pg_standby']
-    result['master_public_ip'] = config.defaults()['master_public_ip']
-    result['master_local_ip'] = get_conf(config, 'master_local_ip')
-    result['user'] = config.defaults()['user']
-    result['debug'] = get_conf(config, 'debug', 'off')
-    result['ssh_debug'] = get_conf(config, 'ssh_debug', 'off')
-    result['port'] = config.defaults()['port']
-    result['ssh_timeout'] = config.defaults()['ssh_timeout']
-    result['archivedir'] = config.defaults()['archivedir']
-    result['pgdata'] = config.defaults()['pgdata']
-    result['pgconf'] = config.defaults()['postgresql_conf']
-    result['hbaconf'] = config.defaults()['pg_hba_conf']
-    result['no_copy_conf'] = get_conf(config, 'no_copy_conf')
-    result['recovery_conf'] = get_conf(config, 'recovery_conf')
-    result['logfile'] = get_conf(config, 'logfile')
-    result['action_failover'] = config.defaults()['action_failover']
-    result['numarchives'] = config.defaults()['numarchives']
-    result['use_streaming_replication'] = get_conf_bool(config, 'use_streaming_replication')
-    result['trigger_file'] = get_conf(config, 'trigger_file', """%s/cmd_end_recovery""" % (result['pgdata'],))
-    result['repl_db_user'] = get_conf(config, 'repl_db_user', 'postgres')
-    result['repl_db_password'] = get_conf(config, 'repl_db_password')
-    result['sslmode'] = get_conf(config, 'sslmode', 'prefer')
-    result['notify_ok'] = config.defaults()['notify_ok']
-    result['notify_warning'] = config.defaults()['notify_warning']
-    result['notify_critical'] = config.defaults()['notify_critical']
-    return result
-
-
-# Validate the command line
-def command_line_check_func(options):
-    if options.configfilename == None:
-        print
-        parser.error("option -C is required")
-        print
-
-    if options.recovertotime and not (options.failover == '999'):
-        print
-        parser.error("option -R requires open -F999")
-        print
-
-    if options.pgctl_action:
-        print
-        valid_action = ['start', 'stop', 'stop_basebackup', 'start_basebackup']
-        print
-        if options.pgctl_action not in valid_action:
+    # Validate the command line
+    # XXX: replace those parser.error with exceptions in the future
+    # for now, they seem to be fine, cause they only happen in the very
+    # beginning, when to resources are allocated yet.
+    @staticmethod
+    def command_line_check_func(options):
+        if options.configfilename == None:
             print
-            parser.error("option -A requires one of start, stop, stop_basebackup or start_basebackup")
+            parser.error("option -C is required")
             print
 
+        if options.recovertotime and not (options.failover == '999'):
+            print
+            parser.error("option -R requires open -F999")
+            print
 
-# Let's make sure executables can be reached
-def check_config_func(globals, options):
-    pathvars = [globals['ssh'], globals['rsync'], globals['pgctl'], globals['pgconf'], globals['hbaconf']]
-    if not globals['use_streaming_replication']:
-        pathvars.extend([globals['pg_standby'], globals['archivedir']])
-    elif options.recovertotime:
-        print 'ERROR: Unable to use recovery_target_time with streaming replication'
-        exit(1)
-    for element in pathvars:
+        if options.pgctl_action:
+            print
+            valid_action = ['start', 'stop', 'stop_basebackup', 'start_basebackup']
+            print
+            if options.pgctl_action not in valid_action:
+                print
+                parser.error("option -A requires one of start, stop, stop_basebackup or start_basebackup")
+                print
+
+    # Let's make sure executables can be reached
+    def check_config_func(self, options):
+        # set more sane value for trigger and recovery files now that we know
+        # pgdata value:
+        if self.trigger_file == "":
+            self.trigger_file = "%s/cmd_end_recovery" % (self.pgdata,)
+        if self.recovery_conf == "":
+            self.recovery_file = """%s/recovery.conf""" % (self.pgdata,)
+        pathvars = [self.ssh, self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf]
+        if not self.use_streaming_replication:
+            pathvars.extend([self.pg_standby, self.archivedir])
+        elif options.recovertotime:
+            raise Exception('CONFIG: Unable to use recovery_target_time with streaming replication')
+        for element in pathvars:
+            try:
+                os.stat("%s" % (str(element)))
+            except OSError, e:
+                raise Exception("CONFIG: can't stat %s %s" % (str(element), str(e)))
+
+    #
+    # Create pg_xlog dir if missing, follow symlink if present
+    #
+    def check_pgxlog_path_func(self):
+        pg_xlog_dir = "%s/%s" % (str(self.pgdata), str('pg_xlog'))
+        pg_xlog_realpath = os.path.realpath(pg_xlog_dir)
+        success = True
         try:
-            os.stat("%s" % (str(element)))
-        except OSError, e:
-            print "CONFIG %s:  %s" % (str(element), str(e))
-            exit(1)
-
-
-#
-# Create pg_xlog dir if missing, follow symlink if present
-#
-def check_pgxlog_path_func(globals):
-    pg_xlog_dir = """%s/%s""" % (str(globals['pgdata']), str('pg_xlog'))
-    pg_xlog_realpath = os.path.realpath(pg_xlog_dir)
-    success = True
-    try:
-        # XXX: we might be able to stat the directory, but still get the
-        # undersired permissions (i.e no write access).
-        os.stat(pg_xlog_realpath)
-    except:
-        try:
-            if globals['debug'] == 'on':
-                print "creating pg_xlog directory: %s" % (pg_xlog_realpath)
-            os.makedirs(pg_xlog_realpath, 0700)
-        except OSError, e:
-            print "ERROR: %s" % (str(e))
-            print "HINT: You may have permission problems"
-            print "Make sure that %s has the ability to create the directory %s" % ((str(globals['user']), (str(pg_xlog_realpath))))
-            success = False
+            # XXX: we might be able to stat the directory, but still get the
+            # undersired permissions (i.e no write access).
+            os.stat(pg_xlog_realpath)
         except:
-            success = False
-    return success
+            try:
+                if self.debug:
+                    print "creating pg_xlog directory: %s" % (pg_xlog_realpath)
+                os.makedirs(pg_xlog_realpath, 0700)
+            except OSError, e:
+                print "ERROR: %s" % (str(e))
+                print "HINT: You may have permission problems"
+                print "Make sure that %s has the ability to create the directory %s" % ((str(self.user), (str(pg_xlog_realpath))))
+                success = False
+            except:
+                success = False
+        return success
 
+    def set_rsync_options(self):
+        self.rsync_flags = "-al %s --delete " % (self.rsync_flags)
+        if self.debug:
+            self.rsync_flags += '-v --stats '
 
-# Notifications
-def notify_ok_func(globals):
-    if globals['notify_ok']:
-        pass
+    def set_pg_standby_options(self):
+        self.pg_standby_flags = '-s5 -w0 -c '
+        if self.debug:
+            self.pg_standby_flags += '-d '
 
-
-def notify_warning_func(globals):
-    if globals['notify_warning']:
-        pass
-
-
-def notify_critical_func(globals):
-    if globals['notify_critical']:
-        pass
-
-
-def set_ssh_options(globals):
-    globals['ssh_flags'] = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (globals['ssh_timeout'])
-    if globals['ssh_debug'] == 'on':
-        globals['ssh_flags'] += '-vvv '
-    globals['ssh_connect'] = """%s %s %s@%s """ % (globals['ssh'], globals['ssh_flags'], globals['user'], globals['master_public_ip'])
-
-
-def set_rsync_options(globals):
-    globals['rsync_flags'] = "-al %s --delete " % (globals['rsync_flags'])
-    if globals['debug'] == 'on':
-        globals['rsync_flags'] += '-v --stats '
-
-
-def set_pg_standby_options(globals):
-    globals['pg_standby_flags'] = '-s5 -w0 -c '
-    if globals['debug'] == 'on':
-        globals['pg_standby_flags'] += '-d '
-
-    if globals['pgversion'] == '8.2':
-        globals['pg_standby_args'] = "%%f %%p -k%s " % (float(globals['numarchives']))
-    else:
-        globals['pg_standby_args'] = "%f %p %r "
-
-
-def set_connect_and_copy_options(globals):
-    # Yes the odd counted " is needed because of the way we have to quote within the command
-    # There may be a better way to do this, but I got tired of fighting.
-    globals['psql_connect'] = """ "%s -A -t -U%s -p%s -dpostgres """ % (globals['psql'], globals['user'], globals['port'])
-    if globals['master_local_ip']:
-        globals['psql_connect'] += '-h%s ' % (globals['master_local_ip'],)
-
-    globals['copy_dirs'] = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (globals['rsync'], globals['rsync_flags'], globals['user'], globals['master_public_ip'])
-    globals['ssh_psql'] = globals['ssh_connect'] + globals['psql_connect']
-
-    globals['pgctl_base'] = "%s -D %s " % (globals['pgctl'], globals['pgdata'])
-    if globals['no_copy_conf']:
-        globals['pgctl_base'] += "-o \"-c config_file=%s\" " % (globals['pgconf'],)
-    if globals['logfile']:
-        globals['pgctl_base'] += "-l \"%s\" " % (globals['logfile'],)
-
-
-def set_recovery_options(globals, options):
-    # Recovery string for recovery.conf
-    if globals['recovery_conf']:
-        globals['recovery_file'] = globals['recovery_conf']
-    else:
-        globals['recovery_file'] = """%s/recovery.conf""" % (globals['pgdata'],)
-    globals['recovery_stopped_file'] = re.sub(r'recovery.conf$', 'recovery.stopped', globals['recovery_conf'])
-    if not globals['use_streaming_replication'] or (options.failover == '999'):
-        globals['recovery_string'] = "restore_command = "
-        if options.failover == '999':
-            globals['recovery_string'] += """'cp %s/%%f "%%p"' """ % (globals['archivedir'],)
-            if options.recovertotime:
-                globals['recovery_string'] += """\nrecovery_target_time = '%s' """ % (options.recovertotime,)
+        if self.pgversion == '8.2':
+            self.pg_standby_args = "%%f %%p -k%s " % (self.numarchives)
         else:
-            globals['recovery_string'] += """'%s %s %s %s' """ % (globals['pg_standby'], globals['pg_standby_flags'], globals['archivedir'], globals['pg_standby_args'])
-    else:
-        # streaming replication and not failover, if password is not supplied
-        # it's expected to be found in .pgpass or via PGPASSWORD variable.
-        # see http://www.postgresql.org/docs/current/static/libpq-envars.html
-        primary_conninfo_string = "host=%s port=%s user=%s sslmode=%s " % (globals['master_public_ip'], globals['port'], globals['repl_db_user'], globals['sslmode'])
-        if len(globals['repl_db_password']) > 0:
-            primary_conninfo_string += "password=%s " % (globals['repl_db_password'],)
-        globals['recovery_string'] = """standby_mode = 'on'\nprimary_conninfo = '%s' \ntrigger_file = '%s' """ % (primary_conninfo_string, globals['trigger_file'])
+            self.pg_standby_args = "%f %p %r "
 
+    def set_connect_and_copy_options(self):
+        # Yes the odd counted " is needed because of the way we have to quote within the command
+        # There may be a better way to do this, but I got tired of fighting.
+        ssh_connect = """%s %s %s@%s """ % (self.ssh, self.ssh_flags, self.user, self.master_public_ip)
+        psql_connect = """ "%s -A -t -U%s -p%s -dpostgres """ % (self.r_psql, self.user, self.port)
 
-# Check the master for being alive
-def ping_check_func(globals):
-    success = exec_query_on_primary(globals, """'SELECT 1'""")
-    for row in success:
-        row = row.rstrip('\n')
-        if globals['debug'] == 'on':
-            print "DEBUG: " + row
-        if str(row) != "1":
-            print "ERROR: Processing critical alert"
-            notify_critical_func(globals)
-            exit(1)
+        if self.master_local_ip:
+            psql_connect += '-h%s ' % (self.master_local_ip,)
+
+        self.copy_dirs = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (self.rsync, self.rsync_flags, self.user, self.master_public_ip)
+        self.ssh_psql = ssh_connect + self.psql_connect
+
+        self.pgctl_base = "%s -D %s " % (self.pg_ctl, self.pgdata)
+        if self.no_copy_conf:
+            self.pgctl_base += "-o \"-c config_file=%s\" " % (self.postgresql_conf,)
+        if self.logfile:
+            self.pgctl_base += "-l \"%s\" " % (self.logfile,)
+
+    def set_recovery_options(self, options):
+        # Recovery string for recovery.conf
+        self.recovery_stopped_file = re.sub(r'recovery.conf$', 'recovery.stopped', self.recovery_conf)
+        if not self.use_streaming_replication or (options.failover == '999'):
+            self.recovery_string = "restore_command = "
+            if options.failover == '999':
+                self.recovery_string += """'cp %s/%%f "%%p"' """ % (self.archivedir,)
+                if options.recovertotime:
+                    self.recovery_string += """\nrecovery_target_time = '%s' """ % (options.recovertotime,)
+            else:
+                self.recovery_string += """'%s %s %s %s' """ % (self.pg_standby, self.pg_standby_flags, self.archivedir, self.pg_standby_args)
         else:
-            print "SUCCESS: Master returned: %s" % (row,)
-        exit(0)
+            # streaming replication and not failover, if password is not supplied
+            # it's expected to be found in .pgpass or via PGPASSWORD variable.
+            # see http://www.postgresql.org/docs/current/static/libpq-envars.html
+            primary_conninfo_string = "host=%s port=%s user=%s sslmode=%s " % (self.master_public_ip, self.port, self.repl_db_user, self.sslmode)
+            if len(self.repl_db_password) > 0:
+                primary_conninfo_string += "password=%s " % (self.repl_db_password,)
+            self.recovery_string = """standby_mode = 'on'\nprimary_conninfo = '%s' \ntrigger_file = '%s' """ % (primary_conninfo_string, self.trigger_file)
 
+    def set_options(self, options):
+        """ Wrapper for varions set_ functions """
+        self.set_ssh_flags()
+        self.set_rsync_options()
+        self.set_pg_standby_options()
+        self.set_connect_and_copy_options()
+        self.set_recovery_options(options)
 
-# TODO: replace popen with subprocess module calls.
-def exec_query_on_primary(globals, query):
-    """ Runs a database query on the primary node and returns the psql output"""
-    if globals['debug']:
-        print 'DEBUG: executing query %s by %s' % (globals['ssh_psql'], query)
-    p = os.popen("%s -c %s\"" % (globals['ssh_psql'], query))
-    result = p.readlines()
-    return result
+    # Check the master for being alive
+    def ping_check_func(self):
+        success = self.exec_query_on_primary("""'SELECT 1'""")
+        for row in success:
+            row = row.rstrip('\n')
+            if self.debug:
+                print "DEBUG: " + row
+            if str(row) != "1":
+                self.notify_external(critical=True, message="no response from master")
+                return False
+            else:
+                return True
 
+    # TODO: replace popen with subprocess module calls.
+    def exec_query_on_primary(self, query):
+        """ Runs a database query on the primary node and returns the psql output"""
+        if self.debug:
+            print 'DEBUG: executing query %s by %s' % (self.ssh_psql, query)
+        p = os.popen("%s -c %s\"" % (self.ssh_psql, query))
+        result = p.readlines()
+        return result
 
-# This function gives us all the non pgdata directories required
-# for operation, such as table spaces
-def primary_get_tablespace_paths(globals):
-    try:
-        paths = exec_query_on_primary(globals, """'SELECT * FROM cmd_get_data_dirs()'""")
-    except Exception, e:
-        print "ERROR: Unable to get namespace paths"
-        print "HINT: Did you apply cmd_standby.sql?"
-        print "EXCEPTION: %s" % (str(e))
-        raise
-    return paths
+    # This function gives us all the non pgdata directories required
+    # for operation, such as table spaces
+    def primary_get_tablespace_paths(self):
+        try:
+            paths = self.exec_query_on_primary("""'SELECT * FROM cmd_get_data_dirs()'""")
+        except Exception, e:
+            print "ERROR: Unable to get namespace paths"
+            print "HINT: Did you apply cmd_standby.sql?"
+            print "EXCEPTION: %s" % (str(e))
+            raise
+        return paths
 
+    def primary_get_datadir_path(self):
+        try:
+            path = self.exec_query_on_primary("""'SELECT * FROM cmd_get_pgdata() LIMIT 1'""")
+        except Exception, e:
+            print "ERROR: Unable to get namespace paths"
+            print "HINT: Did you apply cmd_standby.sql?"
+            print "EXCEPTION: %s" % (str(e))
+            raise
+        return path[0]
 
-def primary_get_datadir_path(globals):
-    try:
-        path = exec_query_on_primary(globals, """'SELECT * FROM cmd_get_pgdata() LIMIT 1'""")
-    except Exception, e:
-        print "ERROR: Unable to get namespace paths"
-        print "HINT: Did you apply cmd_standby.sql?"
-        print "EXCEPTION: %s" % (str(e))
-        raise
-    return path[0]
+    # Start a base backup on the master
+    # First we issue a checkpoint and then a start backup
+    def start_backup_func(self):
+        retval = os.system("rm -rf %s/*" % (self.archivedir,))
+        if retval:
+            raise Exception("Unable to remove old archives")
+        success = self.exec_query_on_primary(""" 'checkpoint' """)
+        for row in success:
+            row = row.rstrip('\n')
+            if self.debug:
+                print "DEBUG: " + row
+            if str(row) != "CHECKPOINT":
+                print "ERROR: Unable to execute CHECKPOINT"
+                self.notify_external(critical=True, message="Unable to execute CHECKPOINT")
+                return False
+        success = self.exec_query_on_primary(""" 'SELECT cmd_pg_start_backup()' """)
+        for row in success:
+            row = row.rstrip('\n')
+            if self.debug:
+                print "DEBUG: cmd_pg_start_backup:  " + row
+            if str(row) != "1":
+                print "ERROR: Unable to start base backup"
+                return False
+        return True
 
+    def stop_backup_func(self):
+        success = self.exec_query_on_primary(""" 'SELECT cmd_pg_stop_backup()' """)
+        for row in success:
+            row = row.rstrip('\n')
+            if self.debug:
+                print "DEBUG: cmd_pg_stop_backup: " + row
+            if str(row) != "1":
+                print "ERROR: Unable to stop base backup"
+                return False
+        return True
 
-# Start a base backup on the master
-# First we issue a checkpoint and then a start backup
-def start_backup_func(globals):
-    retval = os.system("rm -rf %s/*" % (globals['archivedir'],))
-    if retval:
-        raise Exception("Unable to remove old archives")
-    success = exec_query_on_primary(globals, """ 'checkpoint' """)
-    for row in success:
-        row = row.rstrip('\n')
-        if globals['debug'] == 'on':
-            print "DEBUG: " + row
-        if str(row) != "CHECKPOINT":
-            print "ERROR: Unable to execute CHECKPOINT"
-            notify_critical_func(globals)
-            return False
-    success = exec_query_on_primary(globals, """ 'SELECT cmd_pg_start_backup()' """)
-    for row in success:
-        row = row.rstrip('\n')
-        if globals['debug'] == 'on':
-            print "DEBUG: cmd_pg_start_backup:  " + row
-        if str(row) != "1":
-            print "ERROR: UNABLE to start base backup"
-            return False
-    return True
+    # Simple function to help ensure we have all paths created for postgresql
+    def dbinit_func(self):
+        # check whether pgdata and tablespace paths exist, create if not.
+        paths = self.primary_get_tablespace_paths()
+        paths.insert(0, self.pgdata)
+        for row in paths:
+            if self.debug:
+                print "DEBUG: " + row
+            row = row.rstrip('\n')
+            if not os.path.isdir(row):
+                os.makedirs(row, 0700)
 
-
-def stop_backup_func(globals):
-    success = exec_query_on_primary(globals, """ 'SELECT cmd_pg_stop_backup()' """)
-    for row in success:
-        row = row.rstrip('\n')
-        if globals['debug'] == 'on':
-            print "DEBUG: cmd_pg_stop_backup: " + row
-        if str(row) != "1":
-            print "ERROR: Unable to stop base backup"
-            return False
-    return True
-
-
-# Simple function to help ensure we have all paths created for postgresql
-def dbinit_func(globals):
-    # check whether pgdata and tablespace paths exist, create if not.
-    paths = primary_get_tablespace_paths(globals)
-    paths.insert(0, globals['pgdata'])
-    for row in paths:
-        if globals['debug'] == 'on':
-            print "DEBUG: " + row
-        row = row.rstrip('\n')
-        if not os.path.isdir(row):
-            os.makedirs(row, 0700)
-
-
-# Takes a base backup of master. This function is tricky because
-# there is a possibility of a non 0 exit status even when successful
-def base_backup_func(globals):
-    # first, copy tablespaces
-    paths = primary_get_tablespace_paths(globals)
-    for row in paths:
-        if globals['debug'] == 'on':
-            print "DEBUG: " + row
-        row = row.rstrip('\n')
-        retval = system("%s%s/ %s/" % (globals['copy_dirs'], row, row))
+    # Takes a base backup of master. This function is tricky because
+    # there is a possibility of a non 0 exit status even when successful
+    def base_backup_func(self):
+        # first, copy tablespaces
+        paths = self.primary_get_tablespace_paths()
+        for row in paths:
+            if self.debug:
+                print "DEBUG: " + row
+            row = row.rstrip('\n')
+            retval = system("%s%s/ %s/" % (self.copy_dirs, row, row))
+            if retval:
+                raise RsyncFailure
+        # finally, copy over pgdata
+        master_pgdata = self.primary_get_datadir_path().strip('\n')
+        # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
+        # XXX: does it makes sense at all, given that we don't copy pg_xlog from master?
+        if self.use_streaming_replication:
+            if self.debug:
+                print "DEBUG: cleaning up " + master_pgdata + "/pg_xlog/ directory before rsync"
+            os.system("rm -rf " + self.pgdata + "/pg_xlog/*")
+        retval = system("%s%s/ %s/" % (self.copy_dirs, master_pgdata, self.pgdata))
         if retval:
             raise RsyncFailure
-    # finally, copy over pgdata
-    master_pgdata = primary_get_datadir_path(globals).strip('\n')
-    # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
-    if globals['use_streaming_replication']:
-        if globals['debug'] == 'on':
-            print "DEBUG: cleaning up " + row + "/pg_xlog/ directory before rsync"
-        os.system("rm -rf " + globals['pgdata'] + "/pg_xlog/*")
-    retval = system("%s%s/ %s/" % (globals['copy_dirs'], master_pgdata, globals['pgdata']))
-    if retval:
-        raise RsyncFailure
 
-
-# Start postgresql
-def start_postgresql_func(globals):
-    retval = system(globals['pgctl_base'] + " start")
-    if retval:
-        print "Unable to start PostgreSQL"
-        notify_warning_func()
-        exit(1)
-
-
-# Stop postgresql
-def stop_postgresql_func(globals):
-    retval = system(globals['pgctl_base'] + " -m fast stop")
-    if retval:
-        print "Unable to stop PostgreSQL"
-        notify_critical_func(globals)
-        exit(1)
-
-
-# Writes recovery.conf file to pgdata
-def write_recovery_func(globals):
-    try:
-        file = open(globals['recovery_file'], 'w')
-        file.write('%s' % (globals['recovery_string']))
-        file.close()
-    except Exception, e:
-        print "Unable to write recovery file: %s" % (globals['recovery_file'])
-        print "Exception: %s" % (str(e))
-        notify_critical_func(globals)
-        exit(1)
-
-
-# Copies in production slave configurations from storage location to production pgdata location
-def copy_confs_func(globals):
-    if globals['no_copy_conf']:
-        return
-    try:
-        shutil.copy(globals['pgconf'], globals['pgdata'])
-    except Exception, e:
-        print "Unable to copy configuration files: %s" % (globals['pgconf'])
-        print "Exception: %s" % (str(e))
-        exit(1)
-    try:
-        shutil.copy(globals['hbaconf'], globals['pgdata'])
-    except Exception, e:
-        print "Unable to copy configuration files: %s" % (globals['hbaconf'])
-        print "Exception: %s" % (str(e))
-        exit(1)
-
-
-# Let's make sure that that postgresql is not actually running when needed
-#
-def check_pgpid_func(globals):
-    """
-   Checks to see if postgresql is running
-   """
-    if globals['debug'] == 'on':
-        print "NOTICE: check_pgpid_func()"
-    pidfilename = '%s/postmaster.pid' % (globals['pgdata'])
-    try:
-        os.stat(pidfilename)
-        pidfile = open(pidfilename, 'r')
-        line = int(pidfile.readline())
-        os.kill(line, 0)
-        return 0
-    except:
-        return 1
-
-
-# Standby function, we need to write the recovery configuration
-# and start postgresql
-def standby_func(globals):
-    write_recovery_func(globals)
-    start_postgresql_func(globals)
-
-
-# Function allows you to specify a script to execute on failover
-# The script must return 0 to be considered successful
-def failover_action_func(globals):
-    if globals['action_failover']:
-        retval = system("%s" % (globals['action_failover']))
+    # Start postgresql
+    def start_postgresql_func(self):
+        retval = system(self.pgctl_base + " start")
         if retval:
-            notify_critical_func(globals)
+            print "Unable to start PostgreSQL"
+            self.notify_external(warning=True, message="Unable to start PostgreSQL")
             exit(1)
-        else:
-            print "NOTICE: Statistics are not replicated in warm standy mode."
-            print "HINT: Execute ANALYZE on your databases"
-            exit(0)
 
+    # Stop postgresql
+    def stop_postgresql_func(self):
+        retval = system(self.pgctl_base + " -m fast stop")
+        if retval:
+            print "Unable to stop PostgreSQL"
+            self.notify_external(critical=True, message="Unable to stop PostgreSQL")
+            exit(1)
 
-def run_base_backup(globals):
-    result = True
-    check = check_pgpid_func(globals)
-    if check == 0:
-        print "ERROR: Can not take base backup with PG running locally"
-        result = False
-    else:
-        if start_backup_func(globals):
+    # Writes recovery.conf file to pgdata
+    def write_recovery_func(self):
+        try:
+            file = open(self.recovery_file, 'w')
+            file.write('%s' % (self.recovery_string))
+            file.close()
+        except Exception, e:
+            print "Unable to write recovery file: %s" % (self.recovery_file)
+            print "Exception: %s" % (str(e))
+            self.notify_external(critical=True, message="Unable to write recovery file: %s" % (e,))
+            exit(1)
+
+    # Copies in production slave configurations from storage location to production pgdata location
+    def copy_confs_func(self):
+        if self.no_copy_conf:
+            return
+        for f in (self.postgresql_conf, self.pg_hba_conf):
             try:
-                base_backup_func(globals)
-            except RsyncFailure:
-                print
-                print "WARNING: Failed to get 0 exit status"
-                print "LOG: Check your rsync errors as this may be harmless"
-                print "LOG: File vanished: .... is ok"
-                print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
-                print
-                result = False
+                shutil.copy(f, self.pgdata)
             except Exception, e:
-                print "ERROR: %s" % (str(e),)
-                result = False
-            else:
-                success = check_pgxlog_path_func(globals)
-                if not success:
-                    notify_criticalical_func(globals)
-                    result = False
-            finally:
-                stop_backup_func(globals)
-    return result
-
-
-def do_failover(globals, options):
-    check = check_pgpid_func(globals)
-    if check == 0:
-        stop_postgresql_func(globals)
-    # Note: we already check that use_streaming_replication is not issued
-    # with recovertotime inside check_config_func.
-    if globals['use_streaming_replication']:
-        if check == 0:
-            # pgsql was running, just touch the trigger file and all should be good.
-            try:
-                file = open(globals['trigger_file'], "w")
-                file.close()
-            except Exception, e:
-                print "Unable to write trigger file: %s" % (globals['trigger_file'],)
+                print "Unable to copy configuration files: %s" % (f)
                 print "Exception: %s" % (str(e))
-                return False
+                exit(1)
+
+    # Standby function, we need to write the recovery configuration
+    # and start postgresql
+    def standby_func(self):
+        self.write_recovery_func()
+        self.start_postgresql_func()
+
+    # Function allows you to specify a script to execute on failover
+    # The script must return 0 to be considered successful
+    def failover_action_func(self):
+        if self.action_failover:
+            retval = system("%s" % (self.action_failover))
+            if retval:
+                self.notify_external(critical=True, message="failover action returned non-zero exit code")
+                exit(1)
+            else:
+                print "NOTICE: Statistics are not replicated in warm standy mode."
+                print "HINT: Execute ANALYZE on your databases"
+                exit(0)
+
+    def run_base_backup(self):
+        result = True
+        check = self.check_pgpid_func()
+        if check == 0:
+            print "ERROR: Can not take base backup with PG running locally"
+            result = False
         else:
-            # pgsql is NOT running, and we are trying to failover.  Lets try to rename recovery.conf into recovery.stopped and try to start pgsql.
-            os.rename(globals['recovery_file'], globals['recovery_stopped_file'])
-    else:
-        write_recovery_func(globals)
-    copy_confs_func(globals)
-    start_postgresql_func(globals)
-    failover_action_func(globals)
-    notify_ok_func(globals)
-    return True
+            if self.start_backup_func():
+                try:
+                    self.base_backup_func()
+                except RsyncFailure:
+                    print
+                    print "WARNING: Failed to get 0 exit status"
+                    print "LOG: Check your rsync errors as this may be harmless"
+                    print "LOG: File vanished: .... is ok"
+                    print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
+                    print
+                    result = False
+                except Exception, e:
+                    print "ERROR: %s" % (str(e),)
+                    result = False
+                else:
+                    success = self.check_pgxlog_path_func()
+                    if not success:
+                        self.notify_external(critical=True, message="unable to access xlog path")
+                        result = False
+                finally:
+                    self.stop_backup_func()
+        return result
+
+    def do_failover(options):
+        check = self.check_pgpid_func()
+        if check == 0:
+            self.stop_postgresql_func()
+        # Note: we already check that use_streaming_replication is not issued
+        # with recovertotime inside check_config_func.
+        if self.use_streaming_replication:
+            if check == 0:
+                # pgsql was running, just touch the trigger file and all should be good.
+                try:
+                    file = open(self.trigger_file, "w")
+                    file.close()
+                except Exception, e:
+                    print "Unable to write trigger file: %s" % (self.trigger_file,)
+                    print "Exception: %s" % (str(e))
+                    return False
+            else:
+                # pgsql is NOT running, and we are trying to failover.  Lets try to rename recovery.conf into recovery.stopped and try to start pgsql.
+                os.rename(self.recovery_file, self.recovery_stopped_file)
+        else:
+            self.write_recovery_func()
+        self.copy_confs_func()
+        self.start_postgresql_func()
+        self.failover_action_func()
+        self.notify_external(ok=True, mesage="successfull failover")
+        return True
 
 if __name__ == '__main__':
-    globals = dict()
     # before we do anything, let's just check you we are
     if os.geteuid() == 0:
         sys.exit("\nBad Mojo... no root access for this script\n")
-    (options, args) = parse_commandline_arguments()
+
+    standby = CMDStandby(classdict)
+    (options, args) = standby.parse_commandline_arguments(argslist)
     # check whether the command-line options supplied are sane
-    command_line_check_func(options)
+    standby.command_line_check_func(options)
 
     configfilename = options.configfilename
     base_backup = options.base_backup
-    standby = options.standby
+    setstandby = options.standby
     dbinit = options.dbinit
     pgctl_action = options.pgctl_action
     ping_check = options.ping_check
@@ -560,44 +469,35 @@ if __name__ == '__main__':
     recovertotime = options.recovertotime
 
     try:
-        cfg_vals = load_configuration_file(configfilename)
+        cfg_vals = standby.load_configuration_file(configfilename)
     except Exception, e:
         print "ERROR: %s" % (e,)
         exit(2)
 
-    # copy values obtained from config file to globals
-    for i in cfg_vals:
-        globals[i] = cfg_vals[i]
-
     # Before we do anything, let's check the configuration
-    check_config_func(globals, options)
+    standby.check_config_func(options)
 
     # Configure ssh command-line string, rsync options,
     # pg_standy arguments and recovery options.
-    set_ssh_options(globals)
-    set_rsync_options(globals)
-    set_pg_standby_options(globals)
-    set_connect_and_copy_options(globals)
-    set_recovery_options(globals, options)
-
+    standby.set_options()
     # perform different actions depending on command-line switches
     if dbinit:
-        check = check_pgpid_func(globals)
+        check = standby.check_pgpid_func()
         if check == 0:
             print "ERROR: Can not execute --dbinit with PG running locally"
             exit(1)
         else:
             try:
-                dbinit_func(globals)
+                standby.dbinit_func()
             except OSError, e:
                 print "ERROR: %s" % (str(e))
                 print "HINT: You may have permission problems"
-                print "Make sure that %s has the ability to create the directory: " % (globals['user'], globals['pgdata'])
+                print "Make sure that %s has the ability to create the directory: " % (self.user, self.pgdata)
                 exit(1)
 
     # Run a base backup
     if base_backup:
-        success = run_base_backup(globals)
+        success = standby.run_base_backup()
         if not success:
             exit(1)
         else:
@@ -605,31 +505,35 @@ if __name__ == '__main__':
 
     # If we want to failover to the latest good transaction
     if options.failover == '999':
-        sucess = do_failover(globals, options)
+        sucess = standby.do_failover(options)
         if not sucess:
             exit(1)
         else:
             exit(0)
 
     # If we want to enter standby mode
-    if standby:
-        check = check_pgpid_func(globals)
+    if setstandby:
+        check = self.check_pgpid_func()
         if check == 0:
             print "ERROR: Can not enter standby mode if PG is already running"
             exit(1)
         else:
-            standby_func(globals)
+            self.standby_func()
 
     # If we want to check if we can talk to the master
     if ping_check:
-        ping_check_func(globals)
+        got_response = self.ping_check_func()
+        if got_response:
+            print "SUCCESS: got response from master"
+            exit(0)
+        else:
+            print "ERROR: got no response from master"
+            exit(1)
 
     # If we want to start or stop postgresql on the slave
     if pgctl_action == 'start':
-        start_postgresql_func(globals)
+        self.start_postgresql_func()
     elif pgctl_action == 'stop':
-        stop_postgresql_func(globals)
-
+        self.stop_postgresql_func()
     if pgctl_action == 'stop_basebackup':
-        stop_backup_func(globals)
-
+        self.stop_backup_func()

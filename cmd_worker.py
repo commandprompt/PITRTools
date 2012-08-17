@@ -55,7 +55,6 @@ class CMDWorker:
             result[key] = val
         self.__dict__.update(result)
 
-
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
         Notify some external program (i.e. monitoring plugin)
@@ -88,6 +87,13 @@ class CMDWorker:
             return 0
         except:
             return 1
+
+    # set up our ssh transfer timeout and debug options
+    def set_ssh_flags(self):
+        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (self.ssh_timeout,)
+        if self.ssh_debug:
+            self.ssh_flags += '-vvv '
+
 
 if __name__ == '__main__':
     argslist = (('-F', '--file', dict(dest="archivefilename",
