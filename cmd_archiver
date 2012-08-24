@@ -290,7 +290,7 @@ class CMDArchiver(CMDWorker):
                         raise ArchiveFailure
                     print "NOTICE: no luck shipping archive"
                     queue_dir = self.l_archivedir + "/" + str(host)
-                    queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(self.queue_dir))
+                    queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(queue_dir))
                     retval = os.system(queue_transfer)
                     if retval:
                         print "FATAL: Unable to rsync_transfer or queue_transfer"
