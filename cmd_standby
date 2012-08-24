@@ -479,7 +479,7 @@ if __name__ == '__main__':
 
     # Configure ssh command-line string, rsync options,
     # pg_standy arguments and recovery options.
-    standby.set_options()
+    standby.set_options(options)
     # perform different actions depending on command-line switches
     if dbinit:
         check = standby.check_pgpid_func()
