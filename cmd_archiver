@@ -200,7 +200,7 @@ class CMDArchiver(CMDWorker):
             else:
                 source_or_sent = "--remove-source-files"
             queue_transfer = """%s %s -aq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(self.rsync_bin), str(self.rsync_flags), str(source_or_sent), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
-            retval = system(queue_transfer)
+            retval = os.system(queue_transfer)
             if self.debug:
                 print "NOTICE: Transfering queue = " + queue_transfer
                 print "NOTICE: Transfer retval = " + str(retval)
@@ -248,7 +248,7 @@ class CMDArchiver(CMDWorker):
                         print "NOTICE: Saving archives to queue"
                     queue_dir = self.l_archivedir + "/" + str(host)
                     queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(queue_dir))
-                    retval = system(queue_transfer)
+                    retval = os.system(queue_transfer)
                     if retval:
                         self.notify_external(critical=True, message=str(retval))
                         raise ArchiveFailure
@@ -282,7 +282,7 @@ class CMDArchiver(CMDWorker):
                 if self.debug:
                     print "NOTICE: Shipping archive to: " + str(host)
                     print "NOTICE: Using: " + rsync_transfer
-                retval = system("%s" % (rsync_transfer))
+                retval = os.system("%s" % (rsync_transfer))
                 if retval:
                     if self.flush:
                         # don't try to enqueue the segment archived if this is a flush
@@ -291,7 +291,7 @@ class CMDArchiver(CMDWorker):
                     print "NOTICE: no luck shipping archive"
                     queue_dir = self.l_archivedir + "/" + str(host)
                     queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(self.queue_dir))
-                    retval = system(queue_transfer)
+                    retval = os.system(queue_transfer)
                     if retval:
                         print "FATAL: Unable to rsync_transfer or queue_transfer"
                         self.notify_external(critical=True, message=str(retval))
