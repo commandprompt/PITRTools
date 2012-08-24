@@ -181,7 +181,7 @@ class CMDStandby(CMDWorker):
             psql_connect += '-h%s ' % (self.master_local_ip,)
 
         self.copy_dirs = "%s %s --exclude=pg_log/ --exclude=pg_xlog/ --exclude=postgresql.conf --exclude=pg_hba.conf --exclude=postmaster.pid -e ssh %s@%s:" % (self.rsync, self.rsync_flags, self.user, self.master_public_ip)
-        self.ssh_psql = ssh_connect + self.psql_connect
+        self.ssh_psql = ssh_connect + psql_connect
 
         self.pgctl_base = "%s -D %s " % (self.pg_ctl, self.pgdata)
         if self.no_copy_conf:
