@@ -2,7 +2,7 @@
 #
 # Base class for CMDStandby and CMDArchiver.
 
-
+import os
 from optparse import *
 from ConfigParser import *
 
@@ -70,7 +70,7 @@ class CMDWorker:
         if message:
             exec_str += " %s" % (message,)
         if ok or warning or critical:
-            system(exec_str)
+            os.system(exec_str)
 
     def check_pgpid_func(self):
         """
