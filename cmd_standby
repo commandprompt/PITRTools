@@ -114,12 +114,6 @@ class CMDStandby(CMDWorker):
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
-        # set more sane value for trigger and recovery files now that we know
-        # pgdata value:
-        if self.trigger_file == "":
-            self.trigger_file = "%s/cmd_end_recovery" % (self.pgdata,)
-        if self.recovery_conf == "":
-            self.recovery_file = """%s/recovery.conf""" % (self.pgdata,)
         pathvars = [self.ssh, self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf]
         if not self.use_streaming_replication:
             pathvars.extend([self.pg_standby, self.archivedir])
@@ -190,6 +184,12 @@ class CMDStandby(CMDWorker):
             self.pgctl_base += "-l \"%s\" " % (self.logfile,)
 
     def set_recovery_options(self, options):
+        # set more sane value for trigger and recovery files now that we know
+        # pgdata value:
+        if self.trigger_file == "":
+            self.trigger_file = "%s/cmd_end_recovery" % (self.pgdata,)
+        if self.recovery_conf == "":
+            self.recovery_conf = """%s/recovery.conf""" % (self.pgdata,)
         # Recovery string for recovery.conf
         self.recovery_stopped_file = re.sub(r'recovery.conf$', 'recovery.stopped', self.recovery_conf)
         if not self.use_streaming_replication or (options.failover == '999'):
@@ -352,11 +352,11 @@ class CMDStandby(CMDWorker):
     # Writes recovery.conf file to pgdata
     def write_recovery_func(self):
         try:
-            file = open(self.recovery_file, 'w')
+            file = open(self.recovery_conf, 'w')
             file.write('%s' % (self.recovery_string))
             file.close()
         except Exception, e:
-            print "Unable to write recovery file: %s" % (self.recovery_file)
+            print "Unable to write recovery file: %s" % (self.recovery_conf)
             print "Exception: %s" % (str(e))
             self.notify_external(critical=True, message="Unable to write recovery file: %s" % (e,))
             exit(1)
@@ -440,7 +440,7 @@ class CMDStandby(CMDWorker):
                     return False
             else:
                 # pgsql is NOT running, and we are trying to failover.  Lets try to rename recovery.conf into recovery.stopped and try to start pgsql.
-                os.rename(self.recovery_file, self.recovery_stopped_file)
+                os.rename(self.recovery_conf, self.recovery_stopped_file)
         else:
             self.write_recovery_func()
         self.copy_confs_func()
