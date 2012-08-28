@@ -18,13 +18,15 @@ class CMDWorker:
         self.classdict = classdict
 
     @staticmethod
-    def parse_commandline_arguments(argslist,
+    def parse_commandline_arguments(argslist, options_check_cb=None,
         usage="usage: %prog [options] arg1 arg2"):
 
         parser = OptionParser(usage=usage)
         for arg in argslist:
             parser.add_option(arg[0], arg[1], **arg[2])
         options, args = parser.parse_args()
+        if options_check_cb:
+            options_check_cb(parser, options)
         return (options, args)
 
     def load_configuration_file(self, configfilename):

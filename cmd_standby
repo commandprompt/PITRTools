@@ -92,17 +92,17 @@ class CMDStandby(CMDWorker):
     # for now, they seem to be fine, cause they only happen in the very
     # beginning, when to resources are allocated yet.
     @staticmethod
-    def command_line_check_func(options):
+    def command_line_check_func(parser, options):
         if options.configfilename == None:
-            raise Exception("option -C is required")
+            parser.error("option -C is required")
 
         if options.recovertotime and not (options.failover == '999'):
-            raise Exception("option -R requires open -F999")
+            parser.error("option -R requires open -F999")
 
         if options.pgctl_action:
             valid_action = ['start', 'stop', 'stop_basebackup', 'start_basebackup']
             if options.pgctl_action not in valid_action:
-                raise Exception("option -A requires one of start, stop, stop_basebackup or start_basebackup")
+                parser.error("option -A requires one of start, stop, stop_basebackup or start_basebackup")
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
@@ -447,9 +447,7 @@ if __name__ == '__main__':
         sys.exit("\nBad Mojo... no root access for this script\n")
 
     standby = CMDStandby(classdict)
-    (options, args) = standby.parse_commandline_arguments(argslist)
-    # check whether the command-line options supplied are sane
-    standby.command_line_check_func(options)
+    (options, args) = standby.parse_commandline_arguments(argslist, CMDStandby.command_line_check_func)
 
     configfilename = options.configfilename
     base_backup = options.base_backup
