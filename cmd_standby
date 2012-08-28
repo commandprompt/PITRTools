@@ -94,23 +94,15 @@ class CMDStandby(CMDWorker):
     @staticmethod
     def command_line_check_func(options):
         if options.configfilename == None:
-            print
-            parser.error("option -C is required")
-            print
+            raise Exception("option -C is required")
 
         if options.recovertotime and not (options.failover == '999'):
-            print
-            parser.error("option -R requires open -F999")
-            print
+            raise Exception("option -R requires open -F999")
 
         if options.pgctl_action:
-            print
             valid_action = ['start', 'stop', 'stop_basebackup', 'start_basebackup']
-            print
             if options.pgctl_action not in valid_action:
-                print
-                parser.error("option -A requires one of start, stop, stop_basebackup or start_basebackup")
-                print
+                raise Exception("option -A requires one of start, stop, stop_basebackup or start_basebackup")
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
