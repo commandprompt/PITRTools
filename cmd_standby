@@ -422,7 +422,7 @@ class CMDStandby(CMDWorker):
                     self.stop_backup_func()
         return result
 
-    def do_failover(options):
+    def do_failover(self, options):
         check = self.check_pgpid_func()
         if check == 0:
             self.stop_postgresql_func()
