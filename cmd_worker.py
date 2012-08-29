@@ -2,7 +2,7 @@
 #
 # Base class for CMDStandby and CMDArchiver.
 
-
+import os
 from optparse import *
 from ConfigParser import *
 
@@ -18,13 +18,15 @@ class CMDWorker:
         self.classdict = classdict
 
     @staticmethod
-    def parse_commandline_arguments(argslist,
+    def parse_commandline_arguments(argslist, options_check_cb=None,
         usage="usage: %prog [options] arg1 arg2"):
 
         parser = OptionParser(usage=usage)
         for arg in argslist:
             parser.add_option(arg[0], arg[1], **arg[2])
         options, args = parser.parse_args()
+        if options_check_cb:
+            options_check_cb(parser, options)
         return (options, args)
 
     def load_configuration_file(self, configfilename):
@@ -55,7 +57,6 @@ class CMDWorker:
             result[key] = val
         self.__dict__.update(result)
 
-
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
         Notify some external program (i.e. monitoring plugin)
@@ -71,7 +72,7 @@ class CMDWorker:
         if message:
             exec_str += " %s" % (message,)
         if ok or warning or critical:
-            system(exec_str)
+            os.system(exec_str)
 
     def check_pgpid_func(self):
         """
@@ -88,6 +89,13 @@ class CMDWorker:
             return 0
         except:
             return 1
+
+    # set up our ssh transfer timeout and debug options
+    def set_ssh_flags(self):
+        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (self.ssh_timeout,)
+        if self.ssh_debug:
+            self.ssh_flags += '-vvv '
+
 
 if __name__ == '__main__':
     argslist = (('-F', '--file', dict(dest="archivefilename",

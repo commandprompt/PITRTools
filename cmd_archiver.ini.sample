@@ -31,7 +31,7 @@ slaves: 192.168.1.201,192.168.1.202
 user: postgres					
 
 ; if scp can't connect in 10 seconds error
-timeout: 10
+ssh_timeout: 10
 
 ; command to process in ok					
 notify_ok: echo OK
