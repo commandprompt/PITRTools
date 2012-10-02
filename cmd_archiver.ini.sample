@@ -1,10 +1,10 @@
 [DEFAULT]
+
 ; online or offline
-state: online					
+state: online
 
 ; The base database directory
-
-pgdata: /var/lib/postgresql/8.3/main
+pgdata: /var/lib/postgresql/8.4/main
 
 ; where to remotely copy archives
 r_archivedir: /var/lib/postgresql/archive
@@ -12,8 +12,8 @@ r_archivedir: /var/lib/postgresql/archive
 ; where to locally copy archives
 l_archivedir: /var/lib/postgresql/archive
 
-; where is rsync				
-rsync_bin: /usr/bin/rsync			
+; where is rsync
+rsync_bin: /usr/bin/rsync
 
 ; extra rsync flags
 rsync_flags: -z
@@ -21,19 +21,18 @@ rsync_flags: -z
 ; option 2 or 3, if running RHEL5 or similar it is likely 2
 ; if you are running something that ships remotely modern software
 ; it will be 3
+rsync_version = 3
 
-rsync_version = 2
-
-; IP of slave					
+; IP of slave
 slaves: 192.168.1.201,192.168.1.202
 
-; the user that will be using scp				
-user: postgres					
+; the user that will be using rsync
+user: postgres
 
-; if scp can't connect in 10 seconds error
+; if rsync can't connect in 10 seconds error
 ssh_timeout: 10
 
-; command to process in ok					
+; command to process in ok
 notify_ok: echo OK
 
 ; command to process in warning
@@ -42,8 +41,9 @@ notify_warning:  echo WARNING
 ; command to process in critical
 notify_critical: echo CRITICAL
 
-; if you want to debug on/off only		 	
-debug: on
+; if you want to debug on/off only
+debug: off
 
 ; if you want ssh debug (warning noisy)
 ssh_debug: off
+
