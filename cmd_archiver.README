@@ -39,16 +39,19 @@ The process:
  PITRTools is just a wrapper around standard tools. If you are familiar
  with the process of setting up warm standby, there's not much new to
  learn about what PITRtools does. It simply attempts to make the process
- simpler, so:
+ simpler, so the order of steps to take looks like this:
 
+
+ On standby server
+
+	* cmd_standby -C $CONFIG -I 
+ 
  On master server
 
 	* Turn on archiving
 	* cmd_archiver -C $CONFIG -I
 
  On standby server
-
-	* cmd_standby -C $CONFIG -I 
 	* cmd_standby -C $CONFIG -B 
 	* cmd_standby -C $CONFIG -S
 
