@@ -3,7 +3,8 @@
 ; what major version are we using?
 pgversion: 8.4
 
-; Used for 8.2 (8.1?), should be set to something > than checkpoint_segments on master
+; Used for PostgreSQL version 8.2 and below, should be set 
+; to something > than checkpoint_segments on master
 numarchives: 10
 
 ; Whether or not to use streaming replication.  If this is set to "on"

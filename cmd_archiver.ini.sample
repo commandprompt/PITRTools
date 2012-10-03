@@ -21,12 +21,12 @@ rsync_flags: -z
 ; option 2 or 3, if running RHEL5 or similar it is likely 2
 ; if you are running something that ships remotely modern software
 ; it will be 3
-rsync_version = 3
+rsync_version = 2
 
 ; IP of slave
 slaves: 192.168.1.201,192.168.1.202
 
-; the user that will be using rsync
+; the user for the ssh connection to a standby
 user: postgres
 
 ; if rsync can't connect in 10 seconds error

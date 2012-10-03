@@ -5,10 +5,10 @@
 
 
  cmd_archiver script is used in conjunction with PostgreSQL's native
- archive mode functionality to ship WAL segments to configured Standby
- to replay them.
+ archive mode functionality to ship WAL segments to configured standby
+ server to replay them.
 
- * Automatically ship log files to configured Standby
+ * Automatically ship log files to configured standby server
  * Enable/disable archiving without the need to restart PostgreSQL
  * Alert based on failures
 
@@ -18,18 +18,18 @@ Usage:
  cmd_archiver [options] arg1 arg2
 
  Options:
-   -h, --help              show this help message and exit
+   -h, --help              Show this help message and exit
    -F FILE, --file=FILE    Archive file
    -C FILE, --config=FILE
-                           the name of the archiver config file
+                           The name of the archiver config file
    -f, --flush             Flush all remaining archives to slave
    -I, --init              Initialize master environment
 
 
 Naming conventions:
 
- Master can be referred to also as Archiver.
- Slave is often called Standby.
+ Master server can be referred to also as archiver.
+ Slave is often called standby.
 
  All the names are used interchangeably.
 
@@ -37,16 +37,16 @@ Naming conventions:
 The process:
 
  PITRTools is just a wrapper around standard tools. If you are familiar
- with the process of setting up Warm Standby, there's not much new to
+ with the process of setting up warm standby, there's not much new to
  learn about what PITRtools does. It simply attempts to make the process
  simpler, so:
 
- On Master
+ On master server
 
 	* Turn on archiving
 	* cmd_archiver -C $CONFIG -I
 
- On Slave
+ On standby server
 
 	* cmd_standby -C $CONFIG -I 
 	* cmd_standby -C $CONFIG -B 
@@ -55,10 +55,10 @@ The process:
 
 Prerequisites:
 
- SSH key-based authentication between the Master and Slave (both ways)
+ SSH key-based authentication between the master and standby (both ways)
  for `postgres' user must be configured. Note, PITRtools was designed to
- run only by `postgres' system user, thus your SSH keys must be generated
- for `postgres' shell user.
+ run by `postgres' system user (in fact, any user but root), thus your
+ SSH keys must be generated for `postgres' shell user.
 
 
 Where to put PITRtools files:
@@ -86,7 +86,7 @@ Where to put PITRtools files:
 
 Notes on configuration:
 
- On Master host you need to enable archiving, to do that one must edit
+ On master server you need to enable archiving, to do that one must edit
  the postgresql.conf:
 
 
@@ -103,29 +103,29 @@ Notes on configuration:
 
  assuming your PITRtools files are in $HOME/PITRtools/ directory.
 
- After that, initialize Master environment:
+ After that, initialize master server environment:
 
 	postgres@bitarena:~$ PITRtools/bin/cmd_archiver -C PITRtools/cmd_archiver.ini -I
 
- You are done setting up Master.
+ You are done setting up master server.
 
 
 
-More about options
+More about options:
 
  -f/--flush is used at the command line only.
 
   You use flush before passing -F999 to cmd_standby. This is done
-  to make sure that all logs that master has written are available to
-  the standby before a failover.
+  to make sure that all logs that master server has written are
+  available to the standby server before a failover.
 
   Note, that the use of --flush is a one way trip. Once used, you must
-  bring your slave into production or you will have to issue a new base
+  bring your standby into production or you will have to issue a new base
   backup.
 
  --init
 
-  Used to create the appropriate archive/queue file directories
+  Used to create the appropriate archive/queue file directories.
 
 
 
@@ -137,12 +137,12 @@ cmd_archiver.ini options:
  
  state: online					
 
-	You can change the archiver to offline live, without touching postgresql. 
-	When taking the archiver offline this will cause an non zero exit status
-	to postgresql's archive command on each archive attempt. This is o.k. 
-	because postgresql will just queue up the archives while the archiver is
-	offline. However this can cause you to accidently fill up your hard disk
-	so use with care.
+	You can change the archiver to offline live, without touching PostgreSQL. 
+	When taking the archiver offline, this will cause a nonzero exit status
+	to PostgreSQL's archive command on each archive attempt. This is o.k. 
+	because PostgreSQL will just queue up the archives while the archiver is
+	offline. However, this can cause you to accidently fill up your postgres
+	partition, so use with care.
 
  pgdata: /var/lib/postgresql/8.4/main
 
@@ -151,19 +151,19 @@ cmd_archiver.ini options:
 
  r_archivedir: /var/lib/postgresql/archive
 
-	Where to remotely copy archives. The remote archive directory on Standby
-	host, e.g; the directory that will accept all WAL segment files to be
+	Where to remotely copy archives. The remote archive directory on standby
+	server, i.e. the directory that will accept all WAL segment files to be
 	restored by the standby server.
 
  l_archivedir: /var/lib/postgresql/archive
 
-	sThe local WAL archive directory. For every Standby server a subdirectory
-	named after hostname or IP address of the Standby will be created. The 
-	Archiver will queue any WAL files that has failed to transfer to a 
-	Standby(s) under their respective subdirectories.
+	The local WAL archive directory. For every standby server a subdirectory
+	named after hostname or IP address of the standby will be created. The 
+	archiver will queue any WAL files that has failed to transfer to a 
+	standby(s) under their respective subdirectories.
 
 	This is also used when you want to archive all files locally. For
-	example, if you are using an NFS mount for the Standby server to get its
+	example, if you are using an NFS mount for the standby server to get its
 	files.
 
  rsync_bin: /usr/bin/rsync			
@@ -175,7 +175,7 @@ cmd_archiver.ini options:
 
 	Optional flags to pass to rsync (compression, etc.)
 
- rsync_version = 3
+ rsync_version = 2
 
 	rsync version, run `rsync --version' to see what version you have.
 	Expects 2 or 3, if running RHEL5 or similar it is likely 2.
@@ -184,18 +184,18 @@ cmd_archiver.ini options:
 
  slaves: 192.168.3.1 or slaves: 192.168.3.1,192.168.4.1
 
-	This is the IP address of the Standby server. A hostname/FQDN would work
+	This is the IP address of the standby server. A hostname/FQDN would work
 	as well. It must be a comma separated list for multiple slaves.
 
  user: postgres					
 
 	The UNIX shell user that is using rsync. This is the user that must have
-	SSH keys configured between the Master and Slave.
+	SSH keys configured between the master and standby.
 
  ssh_timeout: 10
 
-	The SSH timeout. If it takes > timeout to begin the transfer the archiver
-	will provide a non-zero return and alert per notify_critical.
+	The SSH timeout. If it takes > timeout to begin the transfer, the archiver
+	will provide a nonzero return and alert per notify_critical.
 
  notify_ok: echo OK
 

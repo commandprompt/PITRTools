@@ -10,8 +10,8 @@
  * Automatically restore archives
  * Automatically purge old archives (if PostgreSQL >8.3)
  * Alert based on failures
- * Failover to latest archive point
- * Stop and start postgresql 
+ * Failover to the latest restore point and point-in-time recovery
+ * Stop and start PostgreSQL
 
 
 
@@ -62,7 +62,7 @@ The process:
 
    PITRtools/bin/cmd_standby -C PITRtools/cmd_standby.ini -F999
 
- To bring a Standby into production, but at a certain point in time is:
+ To bring a standby into production, but at a certain point in time is:
 
    PITRtools/bin/cmd_standby -C PITRtools/cmd_standby.ini -F999 -R '2008-05-28 11:00:38.059389'
 
@@ -72,7 +72,7 @@ The process:
 
 Configuration:
 
- You can call the ini file anything you like however you must have the following header:
+ You can call the ini file anything you like; however, you must have the following header:
 
  [DEFAULT]
 
@@ -88,26 +88,27 @@ Configuration:
 
  use_streaming_replication: off
 
-	If set to on, the recovery.conf file generated on the Standby will use
-	parameters for streaming replication.  Also, the parameters trigger_file,
+	If set to on, the recovery.conf file generated on the standby server will
+	use parameters for streaming replication. Also, the parameters trigger_file,
 	repl_db_user and repl_db_password will be needed.
 
  trigger_file: %(pgdata)/cmd_end_recovery
 
 	Is the file that the "cmd_standby -C cmd_standby.ini -F999" command would
-	create in order to trigger the change from Standby to Master on a running
-	PostgreSQL slave that is configured for streaming replication. If you
-	change this parameter you will need to update recovery.conf file or
+	create in order to trigger the change from standby to master mode on a
+	running PostgreSQL slave that is configured for streaming replication. If
+	you change this parameter you will need to update recovery.conf file or
 	maybe shutdown running PostgreSQL and re-run the -S command.
 
  repl_db_user: postgres
 
-	User that the Standby will use to connect to Master for replication purposes.
+	User that the standby server will use to connect to master server for
+	replication purposes.
 
  repl_db_password: secretpassword
 
 	Password that the standby will use to connect to master for replication purposes.
-	This one can be empty, if you decide to store the password on a .pgpass file.
+	This one can be empty, if you decide to store the password in a .pgpass file.
 
  sslmode:
 
@@ -115,7 +116,7 @@ Configuration:
 	Defaults to 'prefer', accepted values:
 
 		disable      will disable SSL when connecting.
-		allow        will use SSL is server require it.
+		allow        will use SSL if the server requires it.
 		prefer       will use SSL if the server supports it.
 		require      will refuse to connect if the server doesn't support SSL.
 		verfiy-ca    will check server's certificate signature against certificates 
@@ -151,7 +152,7 @@ Configuration:
 
  port: 5432
 
-	The port on the master that postgresql is listening
+	The port on the master that PostgreSQL is listening
 
  master_public_ip: 192.168.3.254
 
@@ -159,7 +160,7 @@ Configuration:
 
  master_local_ip: 127.0.0.1
 
-	The internal ip address psql should connect to on the master
+	The internal IP address psql should connect to on the master
 
  user: postgres
 
@@ -179,7 +180,7 @@ Configuration:
 
  archivedir: /var/lib/postgresql/archive/
 
-	This is where cmd_archiver is copying files from the Master to the Slave.
+	This is where cmd_archiver is copying files from the master to the standby.
 
  pgdata: /var/lib/postgresql/8.4/main
 
@@ -197,7 +198,7 @@ Configuration:
 
 	By default postgresql.conf and pg_hba.conf will be copied from the
 	locations specified above to pgdata directory on failover. Set this
-	to non-empty string to make postgres actually use the above conf files
+	to a nonempty string to make postgres actually use the above conf files
 	without copying them to pgdata.
 
  recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
