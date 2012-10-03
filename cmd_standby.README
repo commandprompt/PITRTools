@@ -27,7 +27,9 @@ Usage:
    -C FILE, --config=FILE
                         the name of the archiver config file
    -F VALUE, --failover=VALUE
-                        If you are serious, set -F999
+                        Value is simply a safeguard measure,
+			you could use -F999 or -F888, etc.
+
    -I, --dbinit         Use before -B
    -P, --ping           Is my master alive?
    -R TIMESTAMP, --recovertotime=TIMESTAMP
