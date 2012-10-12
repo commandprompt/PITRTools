@@ -1,9 +1,11 @@
 [DEFAULT]
-; what major version are we using?
-pgversion: 8.2			
 
-; Used for 8.2 (8.1?), should be set to something > than checkpoint_segments on master				
-numarchives: 10			
+; what major version are we using?
+pgversion: 8.4
+
+; Used for PostgreSQL version 8.2 and below, should be set 
+; to something > than checkpoint_segments on master
+numarchives: 10
 
 ; Whether or not to use streaming replication.  If this is set to "on"
 ; PITRTools will configure the standby server to replicate from master
@@ -12,7 +14,7 @@ numarchives: 10
 use_streaming_replication: off
 
 ; File to touch to end replication when using streaming replication.
-trigger_file: /var/lib/postgresql/data/cmd_end_recovery
+trigger_file: /var/lib/postgresql/PITRtools/cmd_end_recovery
 
 ; User to connect to master DB while using streaming replication,
 ; ignored if not using streaming replication.
@@ -21,14 +23,18 @@ repl_db_user: replication
 ; Password for the user repl_db_user.
 repl_db_password: secret
 
-; sslmode to use when connecting for streaming replication. 
+; sslmode to use when connecting for streaming replication.
 ; Accepted values: the same as libpq: disable, allow, prefer, require, verify-ca and verify-full
 ; Default: sslmode: prefer
 sslmode: prefer
 
+
+
 ; Commands needed for execution
+
+
 ; absolute path to ssh
-ssh: /usr/bin/ssh		
+ssh: /usr/bin/ssh
 
 ; absolute path to rsync
 rsync: /usr/bin/rsync
@@ -36,49 +42,52 @@ rsync: /usr/bin/rsync
 ; extra rsync flags
 rsync_flags: -z
 
-; the path to to the postgres bin		
-pg_standby: /usr/lib/postgresql/8.3/bin/pg_standby
-pg_ctl: /usr/lib/postgresql/8.3/bin/pg_ctl
+; the path to the postgres bin
+pg_standby: /usr/lib/postgresql/8.4/bin/pg_standby
+pg_ctl: /usr/lib/postgresql/8.4/bin/pg_ctl
 
-; path to psql on the master
-r_psql: /usr/lib/postgresql/8.3/bin/psql	
+; path to psql on the Master
+r_psql: /usr/lib/postgresql/8.4/bin/psql
 
 ; Generalized information
 
 ; the port postgresql runs on (master)
-port: 6000
+port: 5432
 
-; ip or name of master server 			
+; IP or name of Master server
 master_public_ip: 192.168.3.254
 
-; the ip address we should use when processing remote shell		
+; the IP address we should use when processing remote shell
 master_local_ip: 127.0.0.1
 
-; the user performed initdb	
+; the user performed initdb
 user: postgres
 
-; on or off			
-debug: off	 	
+; on or off
+debug: off
 
 ; on or off
 ssh_debug: off
 
 ; the timeout for ssh before we throw an alarm
-ssh_timeout: 30			
+ssh_timeout: 30
 
 ; should be the same as r_archivedir for archiver
-archivedir: /data2/pgsql/archive/
+archivedir: /var/lib/postgresql/archive
 
-; where you executed initdb -D to	
-pgdata: /data1/pgsql/data/	
+; where you executed initdb -D to
+pgdata: /var/lib/postgresql/8.4/main
+
+
 
 ; Confs
 
+
 ; This is the postgresql.conf to be used when not in standby
-postgresql_conf: /var/lib/postgresql/etc/postgresql.conf		
+postgresql_conf: /var/lib/postgresql/PITRtools/pg_conf/postgresql.conf
 
 ; This is the pg_hba.conf to be used when not in standby
-pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf		
+pg_hba_conf: /var/lib/postgresql/PITRtools/pg_conf/pg_hba.conf
 
 ; By default postgresql.conf and pg_hba.conf will be copied from the
 ; locations specified above to pgdata directory on failover.
@@ -89,23 +98,25 @@ pg_hba_conf: /var/lib/postgresql/etc/pg_hba.conf
 
 ; The recovery.conf file to create when starting up
 ; Defaults to %(pgdata)/recovery.conf
-recovery_conf: /var/lib/postgresql/etc/recovery.conf
+recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
 
 ; Useful when postgresql.conf doesn't specify log destination
 ; Will be passed with -l to pg_ctl when starting the server.
 ;logfile: /var/log/postgresql/postgresql.log
 
+
+
 ; Alarms
 
-notify_critical: ls
-notify_warning:
-notify_ok:
+
+notify_critical: echo CRITICAL
+notify_warning: echo WARNING
+notify_ok: echo OK
 
 ; On failover action
 
-; Whatever is placed here will be executed on -FS must return 0
+; Whatever is placed here will be executed on -FS must return 0,
+; must have execution bit for at least owner (chmod u+x)
 
-action_failover: /var/lib/postgresql/pitr_tools/failover.sh	
-
-
+action_failover: /var/lib/postgresql/pitr_tools/failover.sh
 

@@ -1,136 +1,224 @@
-@ COPYRIGHT Command Prompt, Inc.
-
-pitr_tools is a suite of utilities to make point in time easier. It uses a
-push mechanism  for updating archives.
-
-Options:
-  -h, --help            show this help message and exit
-  -C FILE, --config=FILE
-                        the name of the archiver config file
-  -f, --flush           Flush all remaining archives to slave
-
-Dependencies:
-
- key based ssh auth between the master and slave (both ways)
-
-To enable, one must edit the postgresql.conf.
-
-archive_mode = on		# allows archiving to be done
-archive_command = 'bin/archiver -C etc/archiver.ini -F %p'
-
--C takes the path to the config file
--F takes the path (or file) of the archive. 
-
--f/--flush is used at the command line only.
-
---flush:
-
-You use flush before passing -F999 to cmd_standby. This is done
-to make sure that all logs that master has written are available to
-the standby before a failover.
-
-Note that the use of --flush is a one way trip. Once used, you must
-bring your slave into production or you will have to issue a new base
-backup.
-
---init
-
-Used to create the appropriate archive/queue file directories
-
---push:
-
-The push option is designed to work with the protocol: file option. 
-Essentially this allows the archiver to copy the archive files to the
-l_archivedir location. You would then call the archiver independently
-of PostgreSQL using a scheduler such as cron. When you call the archiver
-with push it will rsync (using ssh) all files in l_archivedir to 
-r_archivedir.
-
-The archiver.ini file contains a variety of options. 
-
-[DEFAULT]
-; online or offline
-state: online					
-
-You can change the archiver to offline live, without touching postgresql. 
-When taking the archiver offline this will cause an non zero exit status
-to postgresql's archive command on each archive attempt. This is o.k. 
-because postgresql will just queue up the archives while the archiver is
-offline. However this can cause you to accidently fill up your hard disk
-so use with care.
-
-; The base database directory
-
-pgdata: /data1/pgsql/data
-
-This is the PGDATA on the archiving machine.
-
-; where to remotely copy archives
-r_archivedir: /data2/pgsql/archive
-
-The remote archive directory, e.g; the directory that will accept all
-archive files to be restored by the standby server.
-
-; where to locally copy archives
-l_archivedir: /data2/pgsql/archive
-
-The local archive directory. This is used when you want to archive all
-files locally. For example, if you are using an NFS mount for the standby
-server to get its files. It is also used as a queue for when archiving fails
-to a particular slave
-
-Must point to the actual binary of scp.
-
-; where is rsync				
-rsync_bin: /usr/bin/rsync			
-
-Must point to the actual binary of rsync. We use rsync over ssh, so don't
-bother with an rsync server.
-
-; extra rsync flags
-rsync_flags: -z
-
-Optional flags to pass to rsync (compression, etc.)
-
-; IP of slave					
-slaves: 192.168.3.1 or slaves: 192.168.3.1,192.168.4.1
-
-This is the ip address of the standby server. A hostname/FQDN would work as well.
-It must be a command separated list for multiple slaves.
-
-; the user that will be using rsync				
-user: postgres					
-
-The unix shell user that is using rsync. This is the user that must have ssh 
-keys configured between the master and slave.
-
-; if rsync can't connect in 10 seconds error
-timeout: 10
-
-The SSH timeout. If it takes > timeout to begin the transfer the archiver will
-provide a non zero return and alert per notify_critical.
-
-; command to process in ok					
-notify_ok: echo ok 				
-
-Everything is o.k. so what do we do? This should be full path to a script.
-For example, a nagios alert.
-
-; command to process in warning
-notify_warning:  echo WARNING
-
-The same as OK but for warnings.
-
-; command to process in critical
-notify_critical: echo CRITICAL
-
-The same as OK but for CRITICAL. This is total failure conditions.
-
-; if you want to debug on/off only		 	
-debug: off
-
-This will provide you a lot of noisy info to wherever you push your
-postgresql logging.
+ 
+ PITRtools
+ @ COPYRIGHT Command Prompt, Inc.
+ October 2, 2012
 
 
+ cmd_archiver script is used in conjunction with PostgreSQL's native
+ archive mode functionality to ship WAL segments to configured standby
+ server to replay them.
+
+ * Automatically ship log files to configured standby server
+ * Enable/disable archiving without the need to restart PostgreSQL
+ * Alert based on failures
+
+
+Usage:
+
+ cmd_archiver [options] arg1 arg2
+
+ Options:
+   -h, --help              Show this help message and exit
+   -F FILE, --file=FILE    Archive file
+   -C FILE, --config=FILE
+                           The name of the archiver config file
+   -f, --flush             Flush all remaining archives to slave
+   -I, --init              Initialize master environment
+
+
+Naming conventions:
+
+ Master server can be referred to also as archiver.
+ Slave is often called standby.
+
+ All the names are used interchangeably.
+
+
+The process:
+
+ PITRTools is just a wrapper around standard tools. If you are familiar
+ with the process of setting up warm standby, there's not much new to
+ learn about what PITRtools does. It simply attempts to make the process
+ simpler, so the order of steps to take looks like this:
+
+
+ On standby server
+
+	* cmd_standby -C $CONFIG -I 
+ 
+ On master server
+
+	* Turn on archiving
+	* cmd_archiver -C $CONFIG -I
+
+ On standby server
+	* cmd_standby -C $CONFIG -B 
+	* cmd_standby -C $CONFIG -S
+
+
+Prerequisites:
+
+ SSH key-based authentication between the master and standby (both ways)
+ for `postgres' user must be configured. Note, PITRtools was designed to
+ run by `postgres' system user (in fact, any user but root), thus your
+ SSH keys must be generated for `postgres' shell user.
+
+
+Where to put PITRtools files:
+
+ Since PITRtools utilities are run by `postgres' system user they need to
+ have proper permissions and ownership set. 
+
+ We recommend to create PITRtools/ and  PITRtools/bin/ directories in
+ `postgres' system user home directory.
+
+
+	postgres@bitarena:~$ pwd
+	/var/lib/postgresql
+	postgres@bitarena:~$ mkdir -p PITRtools/bin/
+
+
+ Put cmd_archiver.ini config into /var/lib/postgresql/PITRtools/ directory,
+ and the rest of the scripts into /var/lib/postgresql/PITRtools/bin/.
+
+ When ready, set permissions (actual username and groupname may be
+ different on your system):
+
+ root@bitarena:~$ chown -R postgres.postgres /var/lib/postgresql/PITRtools
+
+
+Notes on configuration:
+
+ On master server you need to enable archiving, to do that one must edit
+ the postgresql.conf:
+
+
+  archive_mode = on
+  archive_command = '/var/lib/postgresql/PITRtools/bin/cmd_archiver -C /var/lib/postgresql/PITRtools/cmd_archiver.ini -F %p'
+
+ 	-C takes the path to the config file
+	-F takes the path (or file) of the archive. 
+
+
+ Remember also to apply cmd_standby.sql file:
+
+	 root@bitarena:~# psql -U postgres < ~/PITRTools/cmd_standby.sql
+
+ assuming your PITRtools files are in $HOME/PITRtools/ directory.
+
+ After that, initialize master server environment:
+
+	postgres@bitarena:~$ PITRtools/bin/cmd_archiver -C PITRtools/cmd_archiver.ini -I
+
+ You are done setting up master server.
+
+
+
+More about options:
+
+ -f/--flush is used at the command line only.
+
+  You use flush before passing -F999 to cmd_standby. This is done
+  to make sure that all logs that master server has written are
+  available to the standby server before a failover.
+
+  Note, that the use of --flush is a one way trip. Once used, you must
+  bring your standby into production or you will have to issue a new base
+  backup.
+
+ --init
+
+  Used to create the appropriate archive/queue file directories.
+
+
+
+cmd_archiver.ini options:
+
+
+
+ [DEFAULT]
+ 
+ state: online					
+
+	You can change the archiver to offline live, without touching PostgreSQL. 
+	When taking the archiver offline, this will cause a nonzero exit status
+	to PostgreSQL's archive command on each archive attempt. This is o.k. 
+	because PostgreSQL will just queue up the archives while the archiver is
+	offline. However, this can cause you to accidently fill up your postgres
+	partition, so use with care.
+
+ pgdata: /var/lib/postgresql/8.4/main
+
+	The base database directory. This is the PGDATA on the archiving machine.
+
+
+ r_archivedir: /var/lib/postgresql/archive
+
+	Where to remotely copy archives. The remote archive directory on standby
+	server, i.e. the directory that will accept all WAL segment files to be
+	restored by the standby server.
+
+ l_archivedir: /var/lib/postgresql/archive
+
+	The local WAL archive directory. For every standby server a subdirectory
+	named after hostname or IP address of the standby will be created. The 
+	archiver will queue any WAL files that has failed to transfer to a 
+	standby(s) under their respective subdirectories.
+
+	This is also used when you want to archive all files locally. For
+	example, if you are using an NFS mount for the standby server to get its
+	files.
+
+ rsync_bin: /usr/bin/rsync			
+
+	Must point to the actual binary of rsync. We use rsync over ssh, so don't
+	bother with an rsync server.
+
+ rsync_flags: -z
+
+	Optional flags to pass to rsync (compression, etc.)
+
+ rsync_version = 2
+
+	rsync version, run `rsync --version' to see what version you have.
+	Expects 2 or 3, if running RHEL5 or similar it is likely 2.
+	If you are running something that ships remotely modern software
+	it will be 3.
+
+ slaves: 192.168.3.1 or slaves: 192.168.3.1,192.168.4.1
+
+	This is the IP address of the standby server. A hostname/FQDN would work
+	as well. It must be a comma separated list for multiple slaves.
+
+ user: postgres					
+
+	The UNIX shell user that is using rsync. This is the user that must have
+	SSH keys configured between the master and standby.
+
+ ssh_timeout: 10
+
+	The SSH timeout. If it takes > timeout to begin the transfer, the archiver
+	will provide a nonzero return and alert per notify_critical.
+
+ notify_ok: echo OK
+
+	Everything is o.k. so what do we do? This should be full path to a script.
+	For example, a nagios alert.
+
+ notify_warning:  echo WARNING
+
+	The same as OK but for warnings.
+
+ notify_critical: echo CRITICAL
+
+	The same as OK but for critical. This is total failure conditions.
+
+ debug: off
+
+	This will provide you a lot of noisy info to wherever you push your
+	postgresql logging.
+
+ ssh_debug: off
+
+	Shows more information about SSH session, if set to on.
 
