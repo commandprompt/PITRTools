@@ -25,10 +25,11 @@ Usage:
                         Start or Stop PostgreSQL
    -B, --basebackup     Start/Stop a base backup
    -C FILE, --config=FILE
-                        the name of the archiver config file
+                        the name of the standby config file
    -F VALUE, --failover=VALUE
-                        Value is simply a safeguard measure,
-			you could use -F999 or -F888, etc.
+                        Value is arbitrary 3 digit number,
+			it is simply a safeguard measure and
+			you could use -F999 or -F372, etc.
 
    -I, --dbinit         Use before -B
    -P, --ping           Is my master alive?

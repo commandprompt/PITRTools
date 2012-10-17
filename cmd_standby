@@ -41,7 +41,7 @@ from cmd_worker import CMDWorker
 argslist = (("-A", "--action", dict(dest="pgctl_action", action="store", help="Start/Stop PostgreSQL", metavar="start|stop|stop_basebackup")),
             ("-B", "--basebackup", dict(dest="base_backup", action="store_true", help="Start a base backup", metavar="FILE")),
             ("-C", "--config", dict(dest="configfilename", action="store", help="Name of the archiver config file", metavar="FILE", default='cmd_standby.ini')),
-            ("-F", "--failover", dict(dest="failover", action="store", help="If you are serious, set -F999", metavar="VALUE")),
+            ("-F", "--failover", dict(dest="failover", action="store", help="Value is arbitrary 3 digit number. It is simply a safeguard measure and you could use -F999 or -F372 etc.", metavar="VALUE")),
             ("-I", "--dbinit", dict(dest="dbinit", action="store_true", help="Use before -B", metavar="FILE")),
             ("-P", "--ping", dict(dest="ping_check", action="store_true", help="Is my master alive?", metavar="FILE")),
             ("-R", "--recovertotime", dict(dest="recovertotime", action="store", help="To restore to a specific point in time", metavar="TIMESTAMP")),
