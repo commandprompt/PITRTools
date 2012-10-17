@@ -42,16 +42,14 @@ The process:
  simpler, so the order of steps to take looks like this:
 
 
- On standby server
-
-	* cmd_standby -C $CONFIG -I 
- 
  On master server
 
 	* Turn on archiving
 	* cmd_archiver -C $CONFIG -I
 
  On standby server
+
+	* cmd_standby -C $CONFIG -I 
 	* cmd_standby -C $CONFIG -B 
 	* cmd_standby -C $CONFIG -S
 
