@@ -28,8 +28,8 @@ Usage:
                         the name of the standby config file
    -F VALUE, --failover=VALUE
                         Value is arbitrary 3 digit number,
-			it is simply a safeguard measure and
-			you could use -F999 or -F372, etc.
+                        it is simply a safeguard measure and
+                        you could use -F999 or -F372, etc.
 
    -I, --dbinit         Use before -B
    -P, --ping           Is my master alive?
