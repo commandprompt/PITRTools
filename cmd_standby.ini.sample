@@ -102,6 +102,13 @@ recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
 
 ; Useful when postgresql.conf doesn't specify log destination
 ; Will be passed with -l to pg_ctl when starting the server.
+;
+; If you're worried about having complete logs, either make sure
+; postgresql.conf points to a log file, or use the logfile: parameter.
+;
+; Otherwise postgresql will print on standard stdout and nothing
+; will be recorded in the logs
+;
 ;logfile: /var/log/postgresql/postgresql.log
 
 
