@@ -84,6 +84,14 @@ class RsyncFailure(Exception):
     """ Class to propagate rsync exceptions"""
     pass
 
+class SSHFailure(Exception):
+    """ Class to propagate SSH errors, i.e. wrong password """
+    pass
+
+class RemoteNoData(Exception):
+    """ Class to propagate errors when remote host returns empty data """
+    pass
+
 
 class CMDStandby(CMDWorker):
 
@@ -234,6 +242,12 @@ class CMDStandby(CMDWorker):
             print 'DEBUG: executing query %s by %s' % (self.ssh_psql, query)
         p = os.popen("%s -c %s\"" % (self.ssh_psql, query))
         result = p.readlines()
+        exitstatus = p.close()
+        # check whether ssh has terminated due to an error occurred, likely an incorrect password
+        if exitstatus == 255:
+            raise SSHFailure
+        if len(result) == 0:
+            raise RemoteNoData(query)
         return result
 
     # This function gives us all the non pgdata directories required
@@ -241,20 +255,18 @@ class CMDStandby(CMDWorker):
     def primary_get_tablespace_paths(self):
         try:
             paths = self.exec_query_on_primary("""'SELECT * FROM cmd_get_data_dirs()'""")
-        except Exception, e:
+        except RemoteNoData:
             print "ERROR: Unable to get namespace paths"
             print "HINT: Did you apply cmd_standby.sql?"
-            print "EXCEPTION: %s" % (str(e))
-            raise
+            raise 
         return paths
 
     def primary_get_datadir_path(self):
         try:
             path = self.exec_query_on_primary("""'SELECT * FROM cmd_get_pgdata() LIMIT 1'""")
-        except Exception, e:
+        except RemoteNoData:
             print "ERROR: Unable to get namespace paths"
             print "HINT: Did you apply cmd_standby.sql?"
-            print "EXCEPTION: %s" % (str(e))
             raise
         return path[0]
 
@@ -489,41 +501,47 @@ if __name__ == '__main__':
                 print "HINT: You may have permission problems"
                 print "Make sure that %s has the ability to create the directory: " % (self.user, self.pgdata)
                 exit(1)
+    try:
+        # Run a base backup
+        if base_backup:
+            success = standby.run_base_backup()
+            if not success:
+                exit(1)
+            else:
+                exit(0)
 
-    # Run a base backup
-    if base_backup:
-        success = standby.run_base_backup()
-        if not success:
-            exit(1)
-        else:
-            exit(0)
+        # If we want to failover to the latest good transaction
+        if options.failover == '999':
+            sucess = standby.do_failover(options)
+            if not sucess:
+                exit(1)
+            else:
+                exit(0)
 
-    # If we want to failover to the latest good transaction
-    if options.failover == '999':
-        sucess = standby.do_failover(options)
-        if not sucess:
-            exit(1)
-        else:
-            exit(0)
+        # If we want to enter standby mode
+        if setstandby:
+            check = standby.check_pgpid_func()
+            if check == 0:
+                print "ERROR: Can not enter standby mode if PG is already running"
+                exit(1)
+            else:
+                standby.standby_func()
 
-    # If we want to enter standby mode
-    if setstandby:
-        check = standby.check_pgpid_func()
-        if check == 0:
-            print "ERROR: Can not enter standby mode if PG is already running"
-            exit(1)
-        else:
-            standby.standby_func()
-
-    # If we want to check if we can talk to the master
-    if ping_check:
-        got_response = standby.ping_check_func()
-        if got_response:
-            print "SUCCESS: got response from master"
-            exit(0)
-        else:
-            print "ERROR: got no response from master"
-            exit(1)
+        # If we want to check if we can talk to the master
+        if ping_check:
+            got_response = standby.ping_check_func()
+            if got_response:
+                print "SUCCESS: got response from master"
+                exit(0)
+            else:
+                print "ERROR: got no response from master"
+                exit(1)
+    except RemoteNoData, e:
+        print "ERROR: remote host returned no data for query %s", (e,)
+        exit(1)
+    except SSHFailure:
+        print "Received error code 255 from ssh, likely due to the wrong password"
+        exit(1)
 
     # If we want to start or stop postgresql on the slave
     if pgctl_action == 'start':
