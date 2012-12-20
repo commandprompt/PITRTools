@@ -29,7 +29,7 @@ class CMDWorker:
             options_check_cb(parser, options)
         return (options, args)
 
-    def load_configuration_file(self, configfilename):
+    def load_configuration_file(self, configfilename, set_defaults_cb=None):
         result = dict()
         config = ConfigParser()
         files = config.read(configfilename)
@@ -55,6 +55,8 @@ class CMDWorker:
                 else:
                     raise
             result[key] = val
+        if set_defaults_cb:
+            set_defaults_cb(result)
         self.__dict__.update(result)
 
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
