@@ -117,9 +117,9 @@ class CMDStandby(CMDWorker):
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
-        pathvars = [self.ssh, self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf]
+        pathvars = [self.ssh, self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf, self.archivedir]
         if not self.use_streaming_replication:
-            pathvars.extend([self.pg_standby, self.archivedir])
+            pathvars.extend([self.pg_standby])
         elif options.recovertotime:
             raise Exception('CONFIG: Unable to use recovery_target_time with streaming replication')
         for element in pathvars:
@@ -129,7 +129,7 @@ class CMDStandby(CMDWorker):
                 else:
                     # make a new directory if archivedir doesn't exist.
                     if not os.access(element, os.R_OK | os.W_OK | os.X_OK):
-                        os.mkdir(element, 0700)
+                        os.makedirs(element, 0700)
             except OSError, e:
                 raise Exception("CONFIG: can't stat %s %s" % (str(element), str(e)))
 
@@ -261,9 +261,11 @@ class CMDStandby(CMDWorker):
         p = os.popen("%s -c %s\"" % (self.ssh_psql, query))
         result = p.readlines()
         exitstatus = p.close()
-        # check whether ssh has terminated due to an error occurred, likely an incorrect password
-        if exitstatus == 255:
-            raise SSHFailure
+        if exitstatus:
+            # check whether ssh has terminated due to an error occurred, likely an incorrect password
+            if (exitstatus>>8) == 255:
+                raise SSHFailure
+            raise Exception("command returned non-zero exit status")
         if len(result) == 0 and not emptyok:
             raise RemoteNoData(query)
         return result
@@ -376,7 +378,7 @@ class CMDStandby(CMDWorker):
                 print "DEBUG: " + row
             row = row.rstrip('\n')
             retval = system("%s%s/ %s/" % (self.copy_dirs, row, row))
-            if retval:
+            if retval and retval != 23 and retval != 24: # 23, 24 incomplete or vanished source file. 
                 raise RsyncFailure
         # finally, copy over pgdata
         master_pgdata = self.primary_get_datadir_path().strip('\n')
@@ -387,7 +389,7 @@ class CMDStandby(CMDWorker):
                 print "DEBUG: cleaning up " + master_pgdata + "/pg_xlog/ directory before rsync"
             os.system("rm -rf " + self.pgdata + "/pg_xlog/*")
         retval = system("%s%s/ %s/" % (self.copy_dirs, master_pgdata, self.pgdata))
-        if retval:
+        if retval and retval != 23 and retval != 24:
             raise RsyncFailure
 
     # Start postgresql
@@ -488,7 +490,6 @@ class CMDStandby(CMDWorker):
                 print "WARNING: Failed to get 0 exit status"
                 print "LOG: Check your rsync errors as this may be harmless"
                 print "LOG: File vanished: .... is ok"
-                print "NOTICE: You will need to issue a -Astop_basebackup if you deem these errors harmless"
                 print
             except RemoteNoData, e:
                 print "ERROR: remote host returned no data for query:", e
@@ -500,6 +501,8 @@ class CMDStandby(CMDWorker):
                 result = self.stop_backup_func() and result
         if result:
             print "Base backup finished successfully"
+        else:
+            print "Base backup is unsuccessful and should be restarted"
         return result
 
     def do_failover(self, options):
@@ -546,7 +549,7 @@ class CMDStandby(CMDWorker):
             # at the failover action script. Distinguish that case from failure at failover
             success = success and self.failover_action_func()
             if success:
-                self.notify_external(ok=True, mesage="successfull failover")
+                self.notify_external(ok=True, message="successfull failover")
         return success
 
 if __name__ == '__main__':
@@ -577,6 +580,7 @@ if __name__ == '__main__':
         print "ERROR:", e
         sys.exit(2)
 
+    success = False
     # perform different actions depending on command-line switches
     if dbinit:
         success = standby.dbinit_func()
