@@ -55,7 +55,7 @@ classdict = (('pgversion', 's', None),
            ('pg_ctl', 's', None),
            ('r_psql', 's', None),
            ('pg_standby', 's', None),
-           ('pg_archivecleanup', 's', None)
+           ('pg_archivecleanup', 's', None),
            ('master_public_ip', 's', None),
            ('master_local_ip', 's', ""),
            ('user', 's', None),
