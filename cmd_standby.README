@@ -141,6 +141,9 @@ Configuration:
 
 	The absolute path to the pg_standby binary
 
+ pg_archivecleanup: /usr/lib/postgresql/9.0/bin/pg_archivecleanup
+ 	The absolute path to the pg_archivecleanup binary. Unused on PostgreSQL 8.4 and below.
+
  pg_ctl: /usr/lib/postgresql/8.4/bin/pg_ctl
 
 	The absolute path to the pg_ctl binary.

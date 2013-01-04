@@ -55,6 +55,7 @@ classdict = (('pgversion', 's', None),
            ('pg_ctl', 's', None),
            ('r_psql', 's', None),
            ('pg_standby', 's', None),
+           ('pg_archivecleanup', 's', None)
            ('master_public_ip', 's', None),
            ('master_local_ip', 's', ""),
            ('user', 's', None),
@@ -120,8 +121,10 @@ class CMDStandby(CMDWorker):
         pathvars = [self.ssh, self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf, self.archivedir]
         if not self.use_streaming_replication:
             pathvars.extend([self.pg_standby])
-        elif options.recovertotime:
-            raise Exception('CONFIG: Unable to use recovery_target_time with streaming replication')
+        else:
+            pathvars.extend([self.pg_archivecleanup])
+            if options.recovertotime:
+                raise Exception('CONFIG: Unable to use recovery_target_time with streaming replication')
         for element in pathvars:
             try:
                 if element != self.archivedir:
@@ -210,13 +213,14 @@ class CMDStandby(CMDWorker):
 
         if self.use_streaming_replication and options.failover != '9999':
             restore_command = """'cp %s/%%f "%%p"' """ % (self.archivedir,)
+            cleanup_string = """'%s %s %%r'""" % (self.pg_archivecleanup, self.archivedir)
             primary_conninfo_string = "host=%s port=%s user=%s sslmode=%s " % (self.master_public_ip, self.port, self.repl_db_user, self.sslmode)
             # streaming replication and not failover, if password is not supplied
             # it's expected to be found in .pgpass or via PGPASSWORD variable.
             # see http://www.postgresql.org/docs/current/static/libpq-envars.html
             if len(self.repl_db_password) > 0:
                 primary_conninfo_string += "password=%s " % (self.repl_db_password,)
-            self.recovery_string = """standby_mode = 'on'\nprimary_conninfo = '%s' \ntrigger_file = '%s'\nrestore_command = %s """ % (primary_conninfo_string, self.trigger_file, restore_command)
+            self.recovery_string = """standby_mode = 'on'\nprimary_conninfo = '%s'\ntrigger_file = '%s'\nrestore_command = %s\narchive_cleanup_command = %s """ % (primary_conninfo_string, self.trigger_file, restore_command, cleanup_string)
         elif options.failover == '999':
             self.recovery_string = """restore_command = 'cp %s/%%f "%%p"' """ % (self.archivedir,)
             if options.recovertotime:
