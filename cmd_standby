@@ -226,7 +226,7 @@ class CMDStandby(CMDWorker):
             if options.recovertotime:
                 self.recovery_string += """\nrecovery_target_time = '%s' """ % (options.recovertotime,)
         else:
-            self.recovery_string += """restore_command = '%s %s %s %s' """ % (self.pg_standby, self.pg_standby_flags, self.archivedir, self.pg_standby_args)
+            self.recovery_string = """restore_command = '%s %s %s %s' """ % (self.pg_standby, self.pg_standby_flags, self.archivedir, self.pg_standby_args)
 
     def set_options(self, options):
         """ Wrapper for varions set_ functions """
