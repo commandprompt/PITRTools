@@ -86,10 +86,20 @@ pgdata: /var/lib/postgresql/8.4/main
 ; Confs
 
 
-; This is the postgresql.conf to be used when not in standby
+postgresql_conf: /Volumes/thumb/conf/postgresql.conf
+pg_hba_conf: /Volumes/thumb/conf/pg_hba.conf
+
+; This is the postgresql.conf to be used for the failover
+postgresql_conf_failover: /var/lib/postgresql/PITRtools/failover/postgesql.conf
+
+; This is the pg_hba.conf to be used for the failover
+pg_hba_conf_failover: /var/lib/postgresql/PITRtools/failover/postgresql.conf
+
+
+; This is the postgresql.conf to be used for the failover
 postgresql_conf: /var/lib/postgresql/PITRtools/pg_conf/postgresql.conf
 
-; This is the pg_hba.conf to be used when not in standby
+; This is the pg_hba.conf to be used for the failover
 pg_hba_conf: /var/lib/postgresql/PITRtools/pg_conf/pg_hba.conf
 
 ; By default postgresql.conf and pg_hba.conf will be copied from the
@@ -128,5 +138,5 @@ notify_ok: echo OK
 ; Whatever is placed here will be executed on -FS must return 0,
 ; must have execution bit for at least owner (chmod u+x)
 
-action_failover: /var/lib/postgresql/pitr_tools/failover.sh
+action_failover: /var/lib/postgresql/PITRtools/failover/failover.sh
 
