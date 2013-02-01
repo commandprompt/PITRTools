@@ -87,6 +87,14 @@ class CMDArchiver(CMDWorker):
         if self.debug:
             print "NOTICE: init_env_func()"
         l_archivedir = self.l_archivedir
+        # bail out if archivedir exists and not empty or inaccessible.
+        if (os.access(l_archivedir, F_OK)):
+            if (not os.access(l_archivedir, R_OK | W_OK | X_OK)):
+                print "ERROR: l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir
+                exit(1)
+            if (os.listdir(l_archivedir) != []):
+                print "ERROR: l_archivedir %s must be be empty" % l_archivedir
+                exit(1)
         queues = self.generate_slave_list_func()
         try:
             for host in queues:
