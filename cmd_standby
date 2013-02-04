@@ -202,10 +202,16 @@ class CMDStandby(CMDWorker):
             else:
                 pg_conf = self.postgresql_conf_failover
                 pg_hba_conf = self.pg_hba_conf_failover
+            # XXX: pg_ctl is sensitive to the order of -c options: 
+            # config_file always go first, additional '-o' options doesn't work,
+            # so both postgresql.conf and pg_hba.conf should be in a single -o.
+            config_file_opts = ""
             if pg_conf and os.access(pg_conf, os.F_OK | os.R_OK):
-                self.pgctl_base += "-o \"-c config_file=%s\" " % (pg_conf,)
+                config_file_opts += "-c config_file = %s " % (pg_conf),
             if pg_hba_conf and os.access(pg_hba_conf, os.F_OK | os.R_OK):
-                self.pgctl_base += "-o \" -c hba_file=%s\" " % (pg_hba_conf,)
+                config_file_opts += "-c hba_file = %s " % (pg_hba_conf,)
+            if config_file_opts:
+                self.pgctl_base += "-o \"%s\"" % (config_file_ops,)
         if self.logfile:
             self.pgctl_base += "-l \"%s\" " % (self.logfile,)
 
