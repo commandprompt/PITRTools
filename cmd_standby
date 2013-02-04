@@ -65,12 +65,14 @@ classdict = (('pgversion', 's', None),
            ('ssh_timeout', 'i', None),
            ('archivedir', 's', None),
            ('pgdata', 's', None),
-           ('postgresql_conf', 's', None),
-           ('pg_hba_conf', 's', None),
+           ('postgresql_conf', 's', ""),
+           ('pg_hba_conf', 's', ""),
+           ('postgresql_conf_failover', 's', ""),
+           ('pg_hba.conf_failover', 's', ""),
            ('no_copy_conf', 'b', False),
            ('recovery_conf', 's', ""),
            ('logfile', 's', ""),
-           ('action_failover', 's', None),
+           ('action_failover', 's', ""),
            ('numarchives', 'i', None),
            ('use_streaming_replication', 'b', False),
            ('trigger_file', 's', ""),
@@ -135,6 +137,14 @@ class CMDStandby(CMDWorker):
                         os.makedirs(element, 0700)
             except OSError, e:
                 raise Exception("CONFIG: can't stat %s %s" % (str(element), str(e)))
+        if options.failover:
+            # check that the configuration files are all set.
+            if not self.postgresql_conf_failover or not self.pg_hba_conf_failover:
+                raise Exception("CONFIG: failover is requested but postgresql_conf_failover and/or pg_hba.conf_failover are not set, exiting")
+            else:
+                for f in (self.postgresql_conf_failover, self.pg_hba_conf_failover):
+                    if not os.access(f, os.F_OK | os.R_OK):
+                        raise Exception("CONFIG: unable to read the failover file %s", str(f))
 
     #
     # Create pg_xlog dir if missing, follow symlink if present
@@ -178,7 +188,7 @@ class CMDStandby(CMDWorker):
         else:
             self.pg_standby_args = "%f %p %r "
 
-    def set_connect_and_copy_options(self):
+    def set_connect_and_copy_options(self, options):
         # Yes the odd counted " is needed because of the way we have to quote within the command
         # There may be a better way to do this, but I got tired of fighting.
         ssh_connect = """%s %s %s@%s """ % (self.ssh, self.ssh_flags, self.user, self.master_public_ip)
@@ -192,7 +202,24 @@ class CMDStandby(CMDWorker):
 
         self.pgctl_base = "%s -D %s " % (self.pg_ctl, self.pgdata)
         if self.no_copy_conf:
-            self.pgctl_base += "-o \"-c config_file=%s\" " % (self.postgresql_conf,)
+            # we don't copy configuration files to the data directory, instead,
+            # set command-line options to get them from their pristine locations
+            if not options.failover:
+                pg_conf = self.postgresql_conf
+                pg_hba_conf = self.pg_hba_conf
+            else:
+                pg_conf = self.postgresql_conf_failover
+                pg_hba_conf = self.pg_hba_conf_failover
+            # XXX: pg_ctl is sensitive to the order of -c options: 
+            # config_file always go first, additional '-o' options doesn't work,
+            # so both postgresql.conf and pg_hba.conf should be in a single -o.
+            config_file_opts = ""
+            if pg_conf and os.access(pg_conf, os.F_OK | os.R_OK):
+                config_file_opts += "-c config_file=%s " % (pg_conf,)
+            if pg_hba_conf and os.access(pg_hba_conf, os.F_OK | os.R_OK):
+                config_file_opts += "-c hba_file=%s " % (pg_hba_conf,)
+            if config_file_opts:
+                self.pgctl_base += "-o \"%s\"" % (config_file_opts,)
         if self.logfile:
             self.pgctl_base += "-l \"%s\" " % (self.logfile,)
 
@@ -233,7 +260,7 @@ class CMDStandby(CMDWorker):
         self.set_ssh_flags()
         self.set_rsync_options()
         self.set_pg_standby_options()
-        self.set_connect_and_copy_options()
+        self.set_connect_and_copy_options(options)
         self.set_recovery_options(options)
 
     # Check the master for being alive
@@ -438,14 +465,27 @@ class CMDStandby(CMDWorker):
             raise
 
     # Copies in production slave configurations from storage location to production pgdata location
-    def copy_confs_func(self):
+    def copy_conf(self, failover=False):
+        # return if we opt to set command-line options to read files from
+        # their original location.
         if self.no_copy_conf:
             return
-        for f in (self.postgresql_conf, self.pg_hba_conf):
+        if failover:
+            pg_conf = self.postgresql_conf_failover;
+            pg_hba_conf = self.pg_hba_conf_failover;
+        else:
+            pg_conf = self.postgresql_conf;
+            pg_hba_conf = self.pg_hba_conf;
+
+        for f in (pg_conf, pg_hba_conf):
             try:
-                shutil.copy(f, self.pgdata)
+                if f:
+                    if os.access(f, os.F_OK | os.R_OK):
+                        shutil.copy(f, self.pgdata)
+                    else:
+                        print "WARNING: %s is inaccessible" % (f,)
             except Exception:
-                print "ERROR: Unable to copy configuration files: %s" % (f)
+                print "ERROR: Unable to copy configuration files: %s" % (f,)
                 raise
 
     # Standby function, we need to write the recovery configuration
@@ -461,6 +501,7 @@ class CMDStandby(CMDWorker):
         except Exception, e:
             print "ERROR:", e
         else:
+            self.copy_conf()
             result = self.start_postgresql_func()
         if not result:
             print "ERROR: Unable to enter standby mode"
@@ -542,7 +583,7 @@ class CMDStandby(CMDWorker):
                     self.stop_postgresql_func()
                 self.write_recovery_func()
             # XXX: if it's streaming replication and the server is already running - than it's running with an old set of configuration files.
-            self.copy_confs_func()
+            self.copy_conf(failover=True)
         except Exception, e:
             print "ERROR:", e
             success = False
@@ -606,6 +647,7 @@ if __name__ == '__main__':
         success = standby.ping_check_func()
     # If we want to start or stop postgresql on the slave
     elif pgctl_action == 'start':
+        self.copy_conf()
         success = standby.start_postgresql_func()
     elif pgctl_action == 'stop':
         success = standby.stop_postgresql_func()
