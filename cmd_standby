@@ -34,7 +34,7 @@ import sys
 import re
 
 from sys import *
-from os import *
+from os import system
 from cmd_worker import CMDWorker
 from time import sleep
 
@@ -202,9 +202,9 @@ class CMDStandby(CMDWorker):
             else:
                 pg_conf = self.postgresql_conf_failover
                 pg_hba_conf = self.pg_hba_conf_failover
-            if pg_conf and os.access(pg_conf, F_OK | R_OK):
+            if pg_conf and os.access(pg_conf, os.F_OK | os.R_OK):
                 self.pgctl_base += "-o \"-c config_file=%s\" " % (pg_conf,)
-            if pg_hba_conf and os.access(pg_hba_conf, F_OK | R_OK):
+            if pg_hba_conf and os.access(pg_hba_conf, os.F_OK | os.R_OK):
                 self.pgctl_base += "-o \" -c hba_file=%s\" " % (pg_hba_conf,)
         if self.logfile:
             self.pgctl_base += "-l \"%s\" " % (self.logfile,)
@@ -466,7 +466,7 @@ class CMDStandby(CMDWorker):
         for f in (pg_conf, pg_hba_conf):
             try:
                 if f:
-                    if os.access(f, F_OK | R_OK):
+                    if os.access(f, os.F_OK | os.R_OK):
                         shutil.copy(f, self.pgdata)
                     else:
                         print "WARNING: %s is inaccessible" % (f,)
