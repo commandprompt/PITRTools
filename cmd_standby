@@ -137,6 +137,14 @@ class CMDStandby(CMDWorker):
                         os.makedirs(element, 0700)
             except OSError, e:
                 raise Exception("CONFIG: can't stat %s %s" % (str(element), str(e)))
+        if options.failover:
+            # check that the configuration files are all set.
+            if not self.postgresql_conf_failover or not self.pg_hba_conf_failover:
+                raise Exception("CONFIG: failover is requested but postgresql_conf_failover and/or pg_hba.conf_failover are not set, exiting")
+            else:
+                for f in (self.postgresql_conf_failover, self.pg_hba_conf_failover):
+                    if not os.access(f, os.F_OK | os.R_OK):
+                        raise Exception("CONFIG: unable to read the failover file %s", str(f))
 
     #
     # Create pg_xlog dir if missing, follow symlink if present
