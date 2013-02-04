@@ -180,7 +180,7 @@ class CMDStandby(CMDWorker):
         else:
             self.pg_standby_args = "%f %p %r "
 
-    def set_connect_and_copy_options(self):
+    def set_connect_and_copy_options(self, options):
         # Yes the odd counted " is needed because of the way we have to quote within the command
         # There may be a better way to do this, but I got tired of fighting.
         ssh_connect = """%s %s %s@%s """ % (self.ssh, self.ssh_flags, self.user, self.master_public_ip)
@@ -196,7 +196,7 @@ class CMDStandby(CMDWorker):
         if self.no_copy_conf:
             # we don't copy configuration files to the data directory, instead,
             # set command-line options to get them from their pristine locations
-            if not failover:
+            if not options.failover:
                 pg_conf = self.postgresql_conf
                 pg_hba_conf = self.pg_hba_conf
             else:
@@ -252,7 +252,7 @@ class CMDStandby(CMDWorker):
         self.set_ssh_flags()
         self.set_rsync_options()
         self.set_pg_standby_options()
-        self.set_connect_and_copy_options()
+        self.set_connect_and_copy_options(options)
         self.set_recovery_options(options)
 
     # Check the master for being alive
