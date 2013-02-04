@@ -207,7 +207,7 @@ class CMDStandby(CMDWorker):
             # so both postgresql.conf and pg_hba.conf should be in a single -o.
             config_file_opts = ""
             if pg_conf and os.access(pg_conf, os.F_OK | os.R_OK):
-                config_file_opts += "-c config_file = %s " % (pg_conf),
+                config_file_opts += "-c config_file = %s " % (pg_conf,)
             if pg_hba_conf and os.access(pg_hba_conf, os.F_OK | os.R_OK):
                 config_file_opts += "-c hba_file = %s " % (pg_hba_conf,)
             if config_file_opts:
