@@ -44,6 +44,7 @@ argslist = (('-F', '--file', dict(dest="archivefilename",
                 help="Initialize master environment")))
 
 classdict = (('state', 's', None),
+            ('ssh', 's', None),
             ('rsync_bin', 's', None),
             ('rsync_flags', 's', ""),
             ('slaves', 's', None),

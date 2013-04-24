@@ -33,7 +33,7 @@ sslmode: prefer
 ; Commands needed for execution
 
 
-; absolute path to ssh
+; absolute path to ssh, note you can also add flags such as -P for port.
 ssh: /usr/bin/ssh
 
 ; absolute path to rsync
