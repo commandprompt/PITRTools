@@ -209,7 +209,7 @@ class CMDArchiver(CMDWorker):
                 source_or_sent = "--remove-sent-files"
             else:
                 source_or_sent = "--remove-source-files"
-            queue_transfer = """%s %s -aq %s -e "ssh %s" %s/ %s@%s:%s/""" % (str(self.rsync_bin), str(self.rsync_flags), str(source_or_sent), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
+            queue_transfer = """%s %s -aq %s -e "%s %s" %s/ %s@%s:%s/""" % (str(self.rsync_bin), str(self.rsync_flags), str(source_or_sent), str(self.ssh), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
             retval = os.system(queue_transfer)
             if self.debug:
                 print "NOTICE: Transfering queue = " + queue_transfer
@@ -281,14 +281,14 @@ class CMDArchiver(CMDWorker):
                 if self.debug:
                     print "NOTICE: Archiving for: " + str(host)
                 if self.flush:
-                    rsync_transfer = """%s %s %s/pg_xlog/* -e "ssh %s"  %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.pgdata), str(self.ssh_flags), str(self.user), str(host), str(self.r_archivedir))
+                    rsync_transfer = """%s %s %s/pg_xlog/* -e "%s %s"  %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.pgdata), str(self.ssh), str(self.ssh_flags), str(self.user), str(host), str(self.r_archivedir))
                     self.flush_check_func()
                     check = self.check_pgpid_func()
                     if check == 0:
                         print "ERROR: Can not enter flush mode if PG is already running"
                         raise ArchiveFailure
                 else:
-                    rsync_transfer = """%s %s -q -e "ssh %s" %s %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.ssh_flags), str(self.archivefile), str(self.user), str(host), str(self.r_archivedir))
+                    rsync_transfer = """%s %s -q -e "%s %s" %s %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.ssh), str(self.ssh_flags), str(self.archivefile), str(self.user), str(host), str(self.r_archivedir))
                 if self.debug:
                     print "NOTICE: Shipping archive to: " + str(host)
                     print "NOTICE: Using: " + rsync_transfer
