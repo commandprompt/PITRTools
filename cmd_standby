@@ -120,7 +120,7 @@ class CMDStandby(CMDWorker):
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
-        pathvars = [self.ssh, self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf, self.archivedir]
+        pathvars = [self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf, self.archivedir]
         if not self.use_streaming_replication:
             pathvars.extend([self.pg_standby])
         else:
