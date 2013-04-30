@@ -1,0 +1,138 @@
+[DEFAULT]
+
+; what major version are we using?
+pgversion: 8.4
+
+; Used for PostgreSQL version 8.2 and below, should be set 
+; to something > than checkpoint_segments on master
+numarchives: 10
+
+; Whether or not to use streaming replication.  If this is set to "on"
+; pitrtools will configure the standby server to replicate from master
+; using streaming replication.
+; This can only be used with PostgreSQL 9.0 and up.
+use_streaming_replication: off
+
+; File to touch to end replication when using streaming replication.
+trigger_file: /var/lib/postgresql/pitrtools/cmd_end_recovery
+
+; User to connect to master DB while using streaming replication,
+; ignored if not using streaming replication.
+repl_db_user: replication
+
+; Password for the user repl_db_user.
+repl_db_password: secret
+
+; sslmode to use when connecting for streaming replication.
+; Accepted values: the same as libpq: disable, allow, prefer, require, verify-ca and verify-full
+; Default: sslmode: prefer
+sslmode: prefer
+
+
+
+; Commands needed for execution
+
+
+; absolute path to ssh, note you can also add flags such as -P for port.
+ssh: /usr/bin/ssh
+
+; absolute path to rsync
+rsync: /usr/bin/rsync
+
+; extra rsync flags
+rsync_flags: -z
+
+; the path to the postgres bin
+pg_standby: /usr/lib/postgresql/8.4/bin/pg_standby
+pg_ctl: /usr/lib/postgresql/8.4/bin/pg_ctl
+
+; set it for 9.0 and above if streaming replication is enabled
+pg_archivecleanup: /usr/lib/postgresql/9.0/bin/pg_archivecleanup
+
+; path to psql on the Master
+r_psql: /usr/lib/postgresql/8.4/bin/psql
+
+; Generalized information
+
+; the port postgresql runs on (master)
+port: 5432
+
+; IP or name of Master server
+master_public_ip: 192.168.3.254
+
+; the IP address we should use when processing remote shell
+master_local_ip: 127.0.0.1
+
+; the user performed initdb
+user: postgres
+
+; on or off
+debug: off
+
+; on or off
+ssh_debug: off
+
+; the timeout for ssh before we throw an alarm
+ssh_timeout: 30
+
+; should be the same as r_archivedir for archiver
+archivedir: /var/lib/postgresql/archive
+
+; where you executed initdb -D to
+pgdata: /var/lib/postgresql/8.4/main
+
+
+
+; Confs
+
+; This is the postgresql.conf to be used for the failover
+postgresql_conf_failover: /var/lib/postgresql/pitrtools/failover/postgesql.conf
+
+; This is the pg_hba.conf to be used for the failover
+pg_hba_conf_failover: /var/lib/postgresql/pitrtools/failover/postgresql.conf
+
+
+; This is the postgresql.conf to be used for Postgres when in standby mode
+postgresql_conf: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
+
+; This is the pg_hba.conf to be used for Postgres when in standby mode
+pg_hba_conf: /var/lib/postgresql/pitrtools/pg_conf/pg_hba.conf
+
+; By default postgresql.conf and pg_hba.conf will be copied from the
+; locations specified above to pgdata directory on failover.
+;
+; Uncomment the following to make postgres actually use the above conf
+; files w/o copying them to pgdata.
+;no_copy_conf: true
+
+; The recovery.conf file to create when starting up
+; Defaults to %(pgdata)/recovery.conf
+recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
+
+; Useful when postgresql.conf doesn't specify log destination
+; Will be passed with -l to pg_ctl when starting the server.
+;
+; If you're worried about having complete logs, either make sure
+; postgresql.conf points to a log file, or use the logfile: parameter.
+;
+; Otherwise postgresql will print on standard stdout and nothing
+; will be recorded in the logs
+;
+;logfile: /var/log/postgresql/postgresql.log
+
+
+
+; Alarms
+
+
+notify_critical: echo CRITICAL
+notify_warning: echo WARNING
+notify_ok: echo OK
+
+; On failover action
+
+; Whatever is placed here will be executed on -FS must return 0,
+; must have execution bit for at least owner (chmod u+x)
+
+action_failover: /var/lib/postgresql/pitrtools/failover/failover.sh
+
