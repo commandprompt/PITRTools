@@ -1,0 +1,233 @@
+
+ pitrtools
+ @ COPYRIGHT Command Prompt, Inc.
+ October 2, 2012
+
+ The cmd_standby script is a utility that allows easy management of a warm 
+ standby PostgreSQL server. It currently has the following capabilities:
+
+ * Automatically take a base backup, including table spaces
+ * Automatically restore archives
+ * Automatically purge old archives (if PostgreSQL >8.3)
+ * Alert based on failures
+ * Failover to the latest restore point and point-in-time recovery
+ * Stop and start PostgreSQL
+
+
+
+Usage: 
+
+ cmd_standby [options] arg1 arg2
+
+ Options:
+   -h, --help           show this help message and exit
+   -A start|stop, --action=start|stop
+                        Start or Stop PostgreSQL
+   -B, --basebackup     Start/Stop a base backup
+   -C FILE, --config=FILE
+                        the name of the standby config file
+   -F VALUE, --failover=VALUE
+                        Value is arbitrary 3 digit number,
+                        it is simply a safeguard measure and
+                        you could use -F999 or -F372, etc.
+
+   -I, --dbinit         Use before -B
+   -P, --ping           Is my master alive?
+   -R TIMESTAMP, --recovertotime=TIMESTAMP
+                        If you need to restore to a specific point in time
+   -S, --standby        Enter standby mode
+ 
+
+
+The process:
+
+ You need to apply cmd_standby.sql to master database before starting 
+ standby process on slave.
+
+ The process of configuring a standby slave is akin to the following:
+
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -I
+
+	Fix any problems it reports. Which is likely be pathing or permission
+	issues.
+
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -B
+
+ 	Will start the base backup and fix up pg_xlog if its linked.
+
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -S
+
+	If you want a warm standby, use -S.
+	If you want a cold, you are done.
+
+
+ To bring a warm standby into production run a failover action:
+
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -F999
+
+ To bring a standby into production, but at a certain point in time is:
+
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -F999 -R '2008-05-28 11:00:38.059389'
+
+ Where -R is a valid timestamp.
+
+
+
+Configuration:
+
+ You can call the ini file anything you like; however, you must have the following header:
+
+ [DEFAULT]
+
+ pgversion: 8.4
+
+	What version of PostgreSQL are we running?
+
+ numarchives: 10
+
+	Only valid if pgversion is 8.2. The number of archives to keep that is 
+	greater than checkpoint_segments. E.g. if checkpoint_segments is 3, the 
+	slave will keep 13.
+
+ use_streaming_replication: off
+
+	If set to on, the recovery.conf file generated on the standby server will
+	use parameters for streaming replication. Also, the parameters trigger_file,
+	repl_db_user and repl_db_password will be needed.
+
+ trigger_file: %(pgdata)/cmd_end_recovery
+
+	Is the file that the "cmd_standby -C cmd_standby.ini -F999" command would
+	create in order to bring the former standby online. If you change this
+	parameter you will need to update recovery.conf file or	maybe shutdown
+	running PostgreSQL and re-run the -S command.
+
+ repl_db_user: postgres
+
+	User that the standby server will use to connect to master server for
+	replication purposes.
+
+ repl_db_password: secretpassword
+
+	Password that the standby will use to connect to master for replication purposes.
+	This one can be empty, if you decide to store the password in a .pgpass file.
+
+ sslmode:
+
+	sslmode to use while connecting to master server for streaming replication.
+	Defaults to 'prefer', accepted values are: 
+	
+		disable, allow, prefer, require, verfiy-ca, verify-full
+
+	See more at http://www.postgresql.org/docs/current/static/libpq-ssl.html
+
+ ssh: /usr/bin/ssh
+
+	The absolute path to the ssh binary. You can also pass flags to this and they
+	will be used. Ex: -P for port.
+
+ rsync: /usr/bin/rsync
+
+	The absolute path to the rsync binary.
+
+ rsync_flags: -z
+
+	Optional flags to pass to rsync (compression, etc.)
+
+ r_psql: /usr/lib/postgresql/8.4/bin/psql
+
+	The absolute path to the psql binary on the master.
+
+ pg_standby: /usr/lib/postgresql/8.4/bin/pg_standby
+
+	The absolute path to the pg_standby binary
+
+ pg_archivecleanup: /usr/lib/postgresql/9.0/bin/pg_archivecleanup
+ 	The absolute path to the pg_archivecleanup binary. Unused on PostgreSQL 8.4 and below.
+
+ pg_ctl: /usr/lib/postgresql/8.4/bin/pg_ctl
+
+	The absolute path to the pg_ctl binary.
+
+ port: 5432
+
+	The port on the master that PostgreSQL is listening
+
+ master_public_ip: 192.168.3.254
+
+	The external available ip address for ssh
+
+ master_local_ip: 127.0.0.1
+
+	The internal IP address psql should connect to on the master
+
+ user: postgres
+
+	The user who performed initdb
+
+ debug: on
+
+	If you want the diagnostic info
+
+ ssh_debug: on
+
+	If you want lots of ssh diagnostic info
+
+ ssh_timeout: 30
+
+	If ssh can not connect in this many seconds, we will throw an alarm and exit.
+
+ archivedir: /var/lib/postgresql/archive/
+
+	This is where cmd_archiver is copying files from the master to the standby.
+
+ pgdata: /var/lib/postgresql/8.4/main
+
+	The absolute path to your cluster directory.
+
+ postgresql_conf_failover: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
+
+	The absolute path to the postgresql.conf to use when we failover to become a master.
+
+ pg_hba_conf_failover: /var/lib/postgresql/pitrtools/pg_conf/ipg_hba.conf
+
+	The absolute path to the pg_hba.conf to use when we failover to become a master.
+
+
+ postgresql_conf: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
+
+	The absolute path to the postgresql.conf to use when we bring up the standby.
+
+ pg_hba_conf: /var/lib/postgresql/pitrtools/pg_conf/ipg_hba.conf
+
+	The absolute path to the pg_hba.conf to use when we bring up the standby.
+
+ no_copy_conf: off
+
+	By default postgresql.conf and pg_hba.conf will be copied from the
+	locations specified above to pgdata directory on failover. Set this
+	to on to make postgres actually use the above conf files without
+	copying them to pgdata.
+
+ recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
+
+	The absolute path to the recovery.conf to create when we failover.
+	This defaults to %(pgdata)/recovery.conf
+
+ logfile: /var/log/postgresql/postgresql.log
+
+	The absolute path to file where to append the server log (optional).
+	Useful when postgresql.conf doesn't specify log destination. Will be
+	passed with -l to pg_ctl when starting the server.
+
+ notify_critical: 
+ notify_warning:
+ notify_ok:
+
+	Absolute paths to the script to fire at each alarm level.
+
+ action_failover: /var/lib/postgresql/pitrtools/failover.sh
+
+	Absolute path to the script to fire at the end of failover. This might be
+	to change an IP address on the slave (for example).
+
