@@ -92,10 +92,10 @@ class CMDArchiver(CMDWorker):
         if (os.access(l_archivedir, F_OK)):
             if (not os.access(l_archivedir, R_OK | W_OK | X_OK)):
                 print "ERROR: l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir
-                exit(1)
+                return False
             elif (os.listdir(l_archivedir) != []):
                 print "ERROR: l_archivedir %s must be be empty" % l_archivedir
-                exit(1)
+                return False
             else:
                 print "WARNING: l_archivedir %s already exists" % l_archivedir
         queues = self.generate_slave_list_func()
@@ -120,8 +120,8 @@ class CMDArchiver(CMDWorker):
                 os.stat("%s" % (str(element)))
             except OSError, e:
                 print "Config %s:  %s" % (str(element), str(e))
-                exit(1)
-
+                return False
+            return True
     def get_pgcontroldata_func(self):
         """
         get_pgcontroldata_func doesn't actually do anything yet. This is more
@@ -164,7 +164,7 @@ class CMDArchiver(CMDWorker):
             print "Exiting!"
         else:
             print "Your options are Yes and No"
-        exit(0)
+        return False
 
     def list_queue_func(self):
         """
@@ -238,7 +238,7 @@ class CMDArchiver(CMDWorker):
         if self.state != 'online':
             print "We are offline, queuing archives"
             self.notify_external(warning=True, message="ARCHIVER: We are offline, queuing archives")
-            exit(1)
+            return False
         try:
             slaves = self.generate_slave_list_func()
             # First we send the queue files (if any). If we can't we exit
@@ -315,14 +315,14 @@ class CMDArchiver(CMDWorker):
                     self.notify_external(ok=True, message=str(retval))
         except ArchiveFailure:
             # archiver process was unable to archive the wal segment
-            exit(1)
+            return False
         except Exception, e:
             # generic exception
             print "ERROR: %s" % (e,)
-            exit(2)
+            return False
         else:
             # WAL segment successfully archived or queued
-            exit(0)
+            return True
 
 if __name__ == '__main__':
 
@@ -346,10 +346,17 @@ if __name__ == '__main__':
 
     archiver.set_ssh_flags()
 
+    success = True
     # Actually run
     if init:
         print "We are initializing queues, one moment.\n"
-        archiver.init_env_func()
+        success = archiver.init_env_func()
     else:
-        archiver.check_config_func()
-        archiver.archive_func()
+        success = archiver.check_config_func()
+        if success:
+            success = archiver.archive_func()
+    if success:
+        sys.exit(0)
+    else:
+        sys.exit(1)
+        
