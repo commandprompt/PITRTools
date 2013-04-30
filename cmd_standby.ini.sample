@@ -8,13 +8,13 @@ pgversion: 8.4
 numarchives: 10
 
 ; Whether or not to use streaming replication.  If this is set to "on"
-; PITRTools will configure the standby server to replicate from master
+; pitrtools will configure the standby server to replicate from master
 ; using streaming replication.
 ; This can only be used with PostgreSQL 9.0 and up.
 use_streaming_replication: off
 
 ; File to touch to end replication when using streaming replication.
-trigger_file: /var/lib/postgresql/PITRtools/cmd_end_recovery
+trigger_file: /var/lib/postgresql/pitrtools/cmd_end_recovery
 
 ; User to connect to master DB while using streaming replication,
 ; ignored if not using streaming replication.
@@ -86,17 +86,17 @@ pgdata: /var/lib/postgresql/8.4/main
 ; Confs
 
 ; This is the postgresql.conf to be used for the failover
-postgresql_conf_failover: /var/lib/postgresql/PITRtools/failover/postgesql.conf
+postgresql_conf_failover: /var/lib/postgresql/pitrtools/failover/postgesql.conf
 
 ; This is the pg_hba.conf to be used for the failover
-pg_hba_conf_failover: /var/lib/postgresql/PITRtools/failover/postgresql.conf
+pg_hba_conf_failover: /var/lib/postgresql/pitrtools/failover/postgresql.conf
 
 
 ; This is the postgresql.conf to be used for Postgres when in standby mode
-postgresql_conf: /var/lib/postgresql/PITRtools/pg_conf/postgresql.conf
+postgresql_conf: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
 
 ; This is the pg_hba.conf to be used for Postgres when in standby mode
-pg_hba_conf: /var/lib/postgresql/PITRtools/pg_conf/pg_hba.conf
+pg_hba_conf: /var/lib/postgresql/pitrtools/pg_conf/pg_hba.conf
 
 ; By default postgresql.conf and pg_hba.conf will be copied from the
 ; locations specified above to pgdata directory on failover.
@@ -134,5 +134,5 @@ notify_ok: echo OK
 ; Whatever is placed here will be executed on -FS must return 0,
 ; must have execution bit for at least owner (chmod u+x)
 
-action_failover: /var/lib/postgresql/PITRtools/failover/failover.sh
+action_failover: /var/lib/postgresql/pitrtools/failover/failover.sh
 

@@ -1,5 +1,5 @@
 
- PITRtools
+ pitrtools
  @ COPYRIGHT Command Prompt, Inc.
  October 2, 2012
 
@@ -46,16 +46,16 @@ The process:
 
  The process of configuring a standby slave is akin to the following:
 
-   PITRtools/bin/cmd_standby -C PITRtools/cmd_standby.ini -I
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -I
 
 	Fix any problems it reports. Which is likely be pathing or permission
 	issues.
 
-   PITRtools/bin/cmd_standby -C PITRtools/cmd_standby.ini -B
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -B
 
  	Will start the base backup and fix up pg_xlog if its linked.
 
-   PITRtools/bin/cmd_standby -C PITRtools/cmd_standby.ini -S
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -S
 
 	If you want a warm standby, use -S.
 	If you want a cold, you are done.
@@ -63,11 +63,11 @@ The process:
 
  To bring a warm standby into production run a failover action:
 
-   PITRtools/bin/cmd_standby -C PITRtools/cmd_standby.ini -F999
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -F999
 
  To bring a standby into production, but at a certain point in time is:
 
-   PITRtools/bin/cmd_standby -C PITRtools/cmd_standby.ini -F999 -R '2008-05-28 11:00:38.059389'
+   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -F999 -R '2008-05-28 11:00:38.059389'
 
  Where -R is a valid timestamp.
 
@@ -185,20 +185,20 @@ Configuration:
 
 	The absolute path to your cluster directory.
 
- postgresql_conf_failover: /var/lib/postgresql/PITRtools/pg_conf/postgresql.conf
+ postgresql_conf_failover: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
 
 	The absolute path to the postgresql.conf to use when we failover to become a master.
 
- pg_hba_conf_failover: /var/lib/postgresql/PITRtools/pg_conf/ipg_hba.conf
+ pg_hba_conf_failover: /var/lib/postgresql/pitrtools/pg_conf/ipg_hba.conf
 
 	The absolute path to the pg_hba.conf to use when we failover to become a master.
 
 
- postgresql_conf: /var/lib/postgresql/PITRtools/pg_conf/postgresql.conf
+ postgresql_conf: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
 
 	The absolute path to the postgresql.conf to use when we bring up the standby.
 
- pg_hba_conf: /var/lib/postgresql/PITRtools/pg_conf/ipg_hba.conf
+ pg_hba_conf: /var/lib/postgresql/pitrtools/pg_conf/ipg_hba.conf
 
 	The absolute path to the pg_hba.conf to use when we bring up the standby.
 
@@ -226,7 +226,7 @@ Configuration:
 
 	Absolute paths to the script to fire at each alarm level.
 
- action_failover: /var/lib/postgresql/PITRtools/failover.sh
+ action_failover: /var/lib/postgresql/pitrtools/failover.sh
 
 	Absolute path to the script to fire at the end of failover. This might be
 	to change an IP address on the slave (for example).
