@@ -1,7 +1,7 @@
  
  pitrtools
  @ COPYRIGHT Command Prompt, Inc.
- October 2, 2012
+ May 5, 2013
 
 
  cmd_archiver script is used in conjunction with PostgreSQL's native
@@ -45,6 +45,7 @@ The process:
  On master server
 
 	* Turn on archiving
+	* Install helper scripts
 	* cmd_archiver -C $CONFIG -I
 
  On standby server
@@ -64,49 +65,42 @@ Prerequisites:
 
 Where to put pitrtools files:
 
- Since pitrtools utilities are run by `postgres' system user they need to
- have proper permissions and ownership set. 
+ `postgres' user's home directory is a default recommended location, but
+ it could be located anywhere as long as `postgres' user can access the
+ files.
 
- We recommend to create pitrtools/ and  pitrtools/bin/ directories in
- `postgres' system user home directory.
+ Since pitrtools utilities are run by the `postgres' system user make
+ sure that proper permissions and ownership are set. 
 
+ For example
 
-	postgres@bitarena:~$ pwd
-	/var/lib/postgresql
-	postgres@bitarena:~$ mkdir -p pitrtools/bin/
-
-
- Put cmd_archiver.ini config into /var/lib/postgresql/pitrtools/ directory,
- and the rest of the scripts into /var/lib/postgresql/pitrtools/bin/.
-
- When ready, set permissions (actual username and groupname may be
- different on your system):
-
- root@bitarena:~$ chown -R postgres.postgres /var/lib/postgresql/pitrtools
+ $ chown -R postgres.postgres /var/lib/postgresql/pitrtools
 
 
 Notes on configuration:
 
- On master server you need to enable archiving, to do that one must edit
+ On master server you need to enable archiving, to do that edit
  the postgresql.conf:
 
 
   archive_mode = on
-  archive_command = '/var/lib/postgresql/pitrtools/bin/cmd_archiver -C /var/lib/postgresql/pitrtools/cmd_archiver.ini -F %p'
+  archive_command = '/var/lib/postgresql/pitrtools/bin/cmd_archiver -C /var/lib/postgresql/pitrtools/etc/cmd_archiver.ini -F %p'
 
  	-C takes the path to the config file
 	-F takes the path (or file) of the archive. 
 
 
- Remember also to apply cmd_standby.sql file:
+ Install helper scripts:
 
-	 root@bitarena:~# psql -U postgres < ~/pitrtools/cmd_standby.sql
+	$ psql -U postgres < /var/lib/postgresql/pitrtools/scripts/cmd_standby.sql
 
- assuming your pitrtools files are in $HOME/pitrtools/ directory.
+ 	or
+
+	$ psql -U postgres < /var/lib/postgresql/pitrtools/scripts/cmd_standby.92.sql (for PostgreSQL 9.2)
 
  After that, initialize master server environment:
 
-	postgres@bitarena:~$ pitrtools/bin/cmd_archiver -C pitrtools/cmd_archiver.ini -I
+	$ pitrtools/bin/cmd_archiver -C pitrtools/etc/cmd_archiver.ini -I
 
  You are done setting up master server.
 
@@ -169,7 +163,7 @@ cmd_archiver.ini options:
  ssh:
 
 	The path to ssh. It should be the absolute path. You may also pass ssh
-	flags.
+	flags, such as -p to connect on a non-standard port.
 
  rsync_bin: /usr/bin/rsync			
 

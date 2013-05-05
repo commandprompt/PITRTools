@@ -12,7 +12,8 @@ r_archivedir: /var/lib/postgresql/archive
 ; where to locally copy archives
 l_archivedir: /var/lib/postgresql/archive
 
-; where is ssh and what flags to add
+; The absolute path to the ssh binary. You may also pass ssh
+; flags, such as -p to connect on a non-standard port.
 ssh: /usr/bin/ssh
 
 ; where is rsync
