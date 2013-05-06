@@ -65,9 +65,9 @@ classdict = (('pgversion', 's', None),
            ('ssh_timeout', 'i', None),
            ('archivedir', 's', None),
            ('pgdata', 's', None),
-           ('postgresql_conf', 's', ""),
+           ('pg_conf', 's', ""),
            ('pg_hba_conf', 's', ""),
-           ('postgresql_conf_failover', 's', ""),
+           ('pg_conf_failover', 's', ""),
            ('pg_hba.conf_failover', 's', ""),
            ('no_copy_conf', 'b', False),
            ('recovery_conf', 's', ""),
@@ -120,7 +120,7 @@ class CMDStandby(CMDWorker):
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
-        pathvars = [self.rsync, self.pg_ctl, self.postgresql_conf, self.pg_hba_conf, self.archivedir]
+        pathvars = [self.rsync, self.pg_ctl, self.pg_conf, self.pg_hba_conf, self.archivedir]
         if not self.use_streaming_replication:
             pathvars.extend([self.pg_standby])
         else:
@@ -139,10 +139,10 @@ class CMDStandby(CMDWorker):
                 raise Exception("CONFIG: can't stat %s %s" % (str(element), str(e)))
         if options.failover:
             # check that the configuration files are all set.
-            if not self.postgresql_conf_failover or not self.pg_hba_conf_failover:
-                raise Exception("CONFIG: failover is requested but postgresql_conf_failover and/or pg_hba.conf_failover are not set, exiting")
+            if not self.pg_conf_failover or not self.pg_hba_conf_failover:
+                raise Exception("CONFIG: failover is requested but pg_conf_failover and/or pg_hba.conf_failover are not set, exiting")
             else:
-                for f in (self.postgresql_conf_failover, self.pg_hba_conf_failover):
+                for f in (self.pg_conf_failover, self.pg_hba_conf_failover):
                     if not os.access(f, os.F_OK | os.R_OK):
                         raise Exception("CONFIG: unable to read the failover file %s", str(f))
 
@@ -205,10 +205,10 @@ class CMDStandby(CMDWorker):
             # we don't copy configuration files to the data directory, instead,
             # set command-line options to get them from their pristine locations
             if not options.failover:
-                pg_conf = self.postgresql_conf
+                pg_conf = self.pg_conf
                 pg_hba_conf = self.pg_hba_conf
             else:
-                pg_conf = self.postgresql_conf_failover
+                pg_conf = self.pg_conf_failover
                 pg_hba_conf = self.pg_hba_conf_failover
             # XXX: pg_ctl is sensitive to the order of -c options: 
             # config_file always go first, additional '-o' options doesn't work,
@@ -471,10 +471,10 @@ class CMDStandby(CMDWorker):
         if self.no_copy_conf:
             return
         if failover:
-            pg_conf = self.postgresql_conf_failover;
+            pg_conf = self.pg_conf_failover;
             pg_hba_conf = self.pg_hba_conf_failover;
         else:
-            pg_conf = self.postgresql_conf;
+            pg_conf = self.pg_conf;
             pg_hba_conf = self.pg_hba_conf;
 
         for f in (pg_conf, pg_hba_conf):
