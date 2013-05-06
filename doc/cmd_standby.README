@@ -1,17 +1,19 @@
 
  pitrtools
  @ COPYRIGHT Command Prompt, Inc.
- October 2, 2012
+ May 5, 2013
 
- The cmd_standby script is a utility that allows easy management of a warm 
- standby PostgreSQL server. It currently has the following capabilities:
+ The cmd_standby script is a utility that allows easy management of all types of 
+ standby PostgreSQL servers, from cold to warm and streaming repliaction.
+ 
+ It currently has the following capabilities:
 
- * Automatically take a base backup, including table spaces
- * Automatically restore archives
+ * Easily take a base backup, including table spaces
+ * Restore archives
  * Automatically purge old archives (if PostgreSQL >8.3)
  * Alert based on failures
+ * Stop and start PostgreSQL standby
  * Failover to the latest restore point and point-in-time recovery
- * Stop and start PostgreSQL
 
 
 
@@ -41,41 +43,39 @@ Usage:
 
 The process:
 
- You need to apply cmd_standby.sql to master database before starting 
- standby process on slave.
+ You need to apply cmd_standby.sql (cmd_standby.92.sql if you run PostgreSQL 9.2)
+ to master database before starting standby process on slave.
 
- The process of configuring a standby slave is akin to the following:
+ The process of configuring a standby slave boils down to the following:
 
-   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -I
+   $ pitrtools/bin/cmd_standby -C pitrtools/etc/cmd_standby.ini -I
 
 	Fix any problems it reports. Which is likely be pathing or permission
 	issues.
 
-   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -B
+   $ pitrtools/bin/cmd_standby -C pitrtools/etc/cmd_standby.ini -B
 
  	Will start the base backup and fix up pg_xlog if its linked.
 
-   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -S
+   $ pitrtools/bin/cmd_standby -C pitrtools/etc/cmd_standby.ini -S
 
-	If you want a warm standby, use -S.
-	If you want a cold, you are done.
+	If you want a warm standby or anything more fancier, use -S.
+	If you want a cold one, you are done.
 
 
  To bring a warm standby into production run a failover action:
 
-   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -F999
+   $ pitrtools/bin/cmd_standby -C pitrtools/etc/cmd_standby.ini -F999
 
- To bring a standby into production, but at a certain point in time is:
+ To bring a standby into production, but at a certain point in time do:
 
-   pitrtools/bin/cmd_standby -C pitrtools/cmd_standby.ini -F999 -R '2008-05-28 11:00:38.059389'
+   $ pitrtools/bin/cmd_standby -C pitrtools/etc/cmd_standby.ini -F999 -R '2008-05-28 11:00:38.059389'
 
  Where -R is a valid timestamp.
 
 
 
 Configuration:
-
- You can call the ini file anything you like; however, you must have the following header:
 
  [DEFAULT]
 
@@ -123,8 +123,8 @@ Configuration:
 
  ssh: /usr/bin/ssh
 
-	The absolute path to the ssh binary. You can also pass flags to this and they
-	will be used. Ex: -P for port.
+	The absolute path to the ssh binary. You may also pass ssh
+        flags, such as -p to connect on a non-standard port.
 
  rsync: /usr/bin/rsync
 
