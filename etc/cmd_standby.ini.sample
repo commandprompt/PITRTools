@@ -92,7 +92,6 @@ pg_conf_failover: /var/lib/postgresql/pitrtools/failover/postgesql.conf
 ; This is the pg_hba.conf to be used for the failover
 pg_hba_conf_failover: /var/lib/postgresql/pitrtools/failover/postgresql.conf
 
-
 ; This is the postgresql.conf to be used for Postgres when in standby mode
 pg_conf: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
 

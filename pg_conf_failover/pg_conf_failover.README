@@ -1,0 +1,6 @@
+cmd_standby expects two configuration files in this directory, namely
+
+- postgresql.conf
+- pg_hba.conf
+
+They will be used to start PostgreSQL when you failover. 
