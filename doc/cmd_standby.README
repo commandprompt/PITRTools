@@ -185,20 +185,20 @@ Configuration:
 
 	The absolute path to your cluster directory.
 
- postgresql_conf_failover: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
+ pg_conf_failover: /var/lib/postgresql/pitrtools/etc/pg_conf_failover/postgresql.conf
 
 	The absolute path to the postgresql.conf to use when we failover to become a master.
 
- pg_hba_conf_failover: /var/lib/postgresql/pitrtools/pg_conf/ipg_hba.conf
+ pg_hba_conf_failover: /var/lib/postgresql/pitrtools/etc/pg_conf_failover/pg_hba.conf
 
 	The absolute path to the pg_hba.conf to use when we failover to become a master.
 
 
- postgresql_conf: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
+ postgresql_conf: /var/lib/postgresql/pitrtools/etc/pg_conf/postgresql.conf
 
 	The absolute path to the postgresql.conf to use when we bring up the standby.
 
- pg_hba_conf: /var/lib/postgresql/pitrtools/pg_conf/ipg_hba.conf
+ pg_hba_conf: /var/lib/postgresql/pitrtools/etc/pg_conf/pg_hba.conf
 
 	The absolute path to the pg_hba.conf to use when we bring up the standby.
 
