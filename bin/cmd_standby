@@ -68,7 +68,7 @@ classdict = (('pgversion', 's', None),
            ('pg_conf', 's', ""),
            ('pg_hba_conf', 's', ""),
            ('pg_conf_failover', 's', ""),
-           ('pg_hba.conf_failover', 's', ""),
+           ('pg_hba_conf_failover', 's', ""),
            ('no_copy_conf', 'b', False),
            ('recovery_conf', 's', ""),
            ('logfile', 's', ""),
@@ -140,7 +140,7 @@ class CMDStandby(CMDWorker):
         if options.failover:
             # check that the configuration files are all set.
             if not self.pg_conf_failover or not self.pg_hba_conf_failover:
-                raise Exception("CONFIG: failover is requested but pg_conf_failover and/or pg_hba.conf_failover are not set, exiting")
+                raise Exception("CONFIG: failover is requested but pg_conf_failover and/or pg_hba_conf_failover are not set, exiting")
             else:
                 for f in (self.pg_conf_failover, self.pg_hba_conf_failover):
                     if not os.access(f, os.F_OK | os.R_OK):

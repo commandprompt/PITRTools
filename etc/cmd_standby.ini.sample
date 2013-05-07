@@ -87,16 +87,16 @@ pgdata: /var/lib/postgresql/8.4/main
 ; Confs
 
 ; This is the postgresql.conf to be used for the failover
-pg_conf_failover: /var/lib/postgresql/pitrtools/failover/postgesql.conf
+pg_conf_failover: /var/lib/postgresql/pitrtools/etc/pg_conf_failover/postgresql.conf
 
 ; This is the pg_hba.conf to be used for the failover
-pg_hba_conf_failover: /var/lib/postgresql/pitrtools/failover/postgresql.conf
+pg_hba_conf_failover: /var/lib/postgresql/pitrtools/etc/pg_conf_failover/pg_hba.conf
 
 ; This is the postgresql.conf to be used for Postgres when in standby mode
-pg_conf: /var/lib/postgresql/pitrtools/pg_conf/postgresql.conf
+pg_conf: /var/lib/postgresql/pitrtools/etc/pg_conf/postgresql.conf
 
 ; This is the pg_hba.conf to be used for Postgres when in standby mode
-pg_hba_conf: /var/lib/postgresql/pitrtools/pg_conf/pg_hba.conf
+pg_hba_conf: /var/lib/postgresql/pitrtools/etc/pg_conf/pg_hba.conf
 
 ; By default postgresql.conf and pg_hba.conf will be copied from the
 ; locations specified above to pgdata directory on failover.
