@@ -4,9 +4,9 @@ cmd_standby expects two configuration files in this directory, namely
 - pg_hba.conf
 
 They will be used to start PostgreSQL in standby mode. By default these
-configuration files will be copied from pitrtools/pg_conf/ to PostgreSQL
+configuration files will be copied from pitrtools/etc/pg_conf/ to PostgreSQL
 data folder. However, you can configure cmd_standby to use them directly
-from pg_conf/ without first copying to the data folder.
+from the pg_conf/ without first copying to the data folder.
 
 Use no_copy_conf: parameter in cmd_standby.ini to control how
 these files will be used.
