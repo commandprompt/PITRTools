@@ -19,9 +19,10 @@ class CMDWorker:
 
     @staticmethod
     def parse_commandline_arguments(argslist, options_check_cb=None,
-        usage="usage: %prog [options] arg1 arg2"):
+        usage="usage: %prog [options] arg1 arg2", version="%prog (pitrtools) 1.3\n\nCopyright Command Prompt, Inc.\n\nFor licensing information see the LICENSE file.\n"):
 
-        parser = OptionParser(usage=usage)
+        parser = OptionParser(usage=usage,version=version)
+
         for arg in argslist:
             parser.add_option(arg[0], arg[1], **arg[2])
         options, args = parser.parse_args()
