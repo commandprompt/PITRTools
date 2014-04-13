@@ -60,6 +60,39 @@ class CMDWorker:
             set_defaults_cb(result)
         self.__dict__.update(result)
 
+    #Get and set the required absolute paths for executables
+    def get_bin_paths_func(self, options):
+        exes = ["rsync", "pg_ctl", "r_psql"]
+        exe_paths = []
+        final_paths = {}
+        #Populate list of executables to find depending on config values
+        if not self.use_streaming_replication:
+            binaries.append("pg_standby")
+        else:
+            binaries.append("pg_archivecleanup")
+            if options.recovertotime:
+##              raise ConfigError(...)
+                raise Exception("CONFIG: Unable to use recovery_target_time with streaming replication")
+        #Make sure PATH is actually here
+        if "PATH" in os.environ:
+            path = os.environ['PATH'].split(os.pathsep)
+        else:
+            raise Exception("CONFIG: No PATH in environment, unable to locate binaries.")
+        #Start searching
+        for exe in exes:
+            for directory in path:
+                abspath = os.path.join(directory, exe)
+                if os.access(abspath, os.X_OK):
+                    exe_paths.append(abspath)
+        #Raise exception if we couldn't find all the executables
+        if len(exes) > len(exe_paths):
+            raise Exception("CONFIG: Couldn't find executables: %s" % ("".join(exes)))
+        #Populate final dict of names to paths, assign to self
+        else:
+            for i, exe in enumerate(exes):
+                final_paths[exe] = exe_paths[i]
+        self.__dict__.update(result)
+
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
         Notify some external program (i.e. monitoring plugin)
