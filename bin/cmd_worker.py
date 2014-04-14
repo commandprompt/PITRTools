@@ -59,10 +59,11 @@ class CMDWorker:
         if set_defaults_cb:
             set_defaults_cb(result)
         self.__dict__.update(result)
-
+        `
     #Get and set the required absolute paths for executables
     def get_bin_paths_func(self, options):
         exes = ["rsync", "pg_ctl", "r_psql"]
+        found = []
         exe_paths = []
         final_paths = {}
         #Populate list of executables to find depending on config values
@@ -84,12 +85,14 @@ class CMDWorker:
                 abspath = os.path.join(directory, exe)
                 if os.access(abspath, os.X_OK):
                     exe_paths.append(abspath)
+                    found.append(exe)
+                    exes.remove(exe)
         #Raise exception if we couldn't find all the executables
-        if len(exes) > len(exe_paths):
+        if exes:
             raise Exception("CONFIG: Couldn't find executables: %s" % ("".join(exes)))
         #Populate final dict of names to paths, assign to self
         else:
-            for i, exe in enumerate(exes):
+            for i, exe in enumerate(found):
                 final_paths[exe] = exe_paths[i]
         self.__dict__.update(result)
 
@@ -164,4 +167,5 @@ if __name__ == '__main__':
     worker = CMDWorker(classdict)
     (options, args) = worker.parse_commandline_arguments(argslist)
     worker.load_configuration_file(options.configfilename)
+    worker.get_bin_paths_func()
     print worker.__dict__
