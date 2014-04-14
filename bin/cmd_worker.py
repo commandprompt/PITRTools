@@ -89,7 +89,7 @@ class CMDWorker:
                     exes.remove(exe)
         #Raise exception if we couldn't find all the executables
         if exes:
-            raise Exception("CONFIG: Couldn't find executables: %s" % ("".join(exes)))
+            raise Exception("CONFIG: Couldn't find executables: %s" % (", ".join(exes)))
         #Populate final dict of names to paths, assign to self
         else:
             for i, exe in enumerate(found):
