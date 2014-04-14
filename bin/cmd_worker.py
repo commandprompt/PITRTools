@@ -68,9 +68,9 @@ class CMDWorker:
         final_paths = {}
         #Populate list of executables to find depending on config values
         if not self.use_streaming_replication:
-            binaries.append("pg_standby")
+            exes.append("pg_standby")
         else:
-            binaries.append("pg_archivecleanup")
+            exes.append("pg_archivecleanup")
             if options.recovertotime:
 ##              raise ConfigError(...)
                 raise Exception("CONFIG: Unable to use recovery_target_time with streaming replication")
