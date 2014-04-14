@@ -83,7 +83,7 @@ class CMDWorker:
         for directory in path:
             for exe in exes:
                 abspath = os.path.join(directory, exe)
-                if os.access(abspath, os.X_OK):
+                if os.access(abspath, os.X_OK) and exe not in found:
                     exe_paths.append(abspath)
                     found.append(exe)
                     exes.remove(exe)
@@ -166,5 +166,5 @@ if __name__ == '__main__':
     worker = CMDWorker(classdict)
     (options, args) = worker.parse_commandline_arguments(argslist)
     worker.load_configuration_file(options.configfilename)
-    worker.get_bin_paths_func()
+    worker.get_bin_paths_func(options)
     print worker.__dict__
