@@ -614,6 +614,8 @@ if __name__ == '__main__':
 
     try:
         cfg_vals = standby.load_configuration_file(configfilename)
+        # Locate executables
+        standby.get_bin_paths_func(options)
         # Before we do anything, let's check the configuration
         standby.check_config_func(options)
         # Configure ssh command-line string, rsync options,
