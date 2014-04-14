@@ -67,7 +67,7 @@ class CMDWorker:
         exe_paths = []
         final_paths = {}
         #Populate list of executables to find depending on config values
-        if not self.use_streaming_replication:
+        if not 'use_streaming_replication' in vars(self):
             exes.append("pg_standby")
         else:
             exes.append("pg_archivecleanup")
@@ -80,8 +80,8 @@ class CMDWorker:
         else:
             raise Exception("CONFIG: No PATH in environment, unable to locate binaries.")
         #Start searching
-        for exe in exes:
-            for directory in path:
+        for directory in path:
+            for exe in exes:
                 abspath = os.path.join(directory, exe)
                 if os.access(abspath, os.X_OK):
                     exe_paths.append(abspath)
