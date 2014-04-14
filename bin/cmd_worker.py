@@ -59,7 +59,7 @@ class CMDWorker:
         if set_defaults_cb:
             set_defaults_cb(result)
         self.__dict__.update(result)
-        `
+
     #Get and set the required absolute paths for executables
     def get_bin_paths_func(self, options):
         exes = ["rsync", "pg_ctl", "r_psql"]
