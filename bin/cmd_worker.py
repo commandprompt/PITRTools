@@ -148,7 +148,6 @@ if __name__ == '__main__':
                 help="Initialize master environment")))
 
     classdict = (('state', 's', None),
-                ('rsync_bin', 's', None),
                 ('rsync_flags', 's', ""),
                 ('slaves', 's', None),
                 ('user', 's', None),
