@@ -78,23 +78,23 @@ class CMDWorker:
         if "PATH" in os.environ:
             path = os.environ['PATH'].split(os.pathsep)
         else:
-            raise Exception("CONFIG: No PATH in environment, unable to locate binaries.")
+            raise Exception("CONFIG: No PATH in environment, unable to locate executables.")
         #Start searching
-        for directory in path:
-            for exe in exes:
+        for exe in exes:
+            for directory in path:                
                 abspath = os.path.join(directory, exe)
-                if os.access(abspath, os.X_OK) and exe not in found:
+                if os.access(abspath, os.X_OK):
                     exe_paths.append(abspath)
                     found.append(exe)
                     exes.remove(exe)
         #Raise exception if we couldn't find all the executables
-        if exes:
+        if exes > found:
             raise Exception("CONFIG: Couldn't find executables: %s" % (", ".join(exes)))
         #Populate final dict of names to paths, assign to self
         else:
             for i, exe in enumerate(found):
                 final_paths[exe] = exe_paths[i]
-        self.__dict__.update(result)
+        self.__dict__.update(final_paths)
 
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
