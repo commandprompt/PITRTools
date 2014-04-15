@@ -83,7 +83,7 @@ class CMDWorker:
         for exe in exes:
             for directory in path:                
                 abspath = os.path.join(directory, exe)
-                if os.access(abspath, os.X_OK):
+                if os.access(abspath, os.X_OK) and exe not in found:
                     exe_paths.append(abspath)
                     found.append(exe)
                     exes.remove(exe)
