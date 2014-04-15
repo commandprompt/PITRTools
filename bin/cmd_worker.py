@@ -93,7 +93,6 @@ class CMDWorker:
             for i, exe in enumerate(found):
                 final_paths[exe] = exe_paths[i]
         self.__dict__.update(final_paths)
-        print final_paths
 
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
