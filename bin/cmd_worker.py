@@ -5,7 +5,6 @@
 import os
 from optparse import *
 from ConfigParser import *
-from gmode import *
 
 class CMDWorker:
     """
