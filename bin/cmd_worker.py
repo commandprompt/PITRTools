@@ -61,7 +61,7 @@ class CMDWorker:
 
     #Get and set the required absolute paths for executables
     def get_bin_paths_func(self, options):
-        exes = ["rsync", "pg_ctl", "psql"]
+        exes = ["rsync", "pg_ctl", "psql", "ssh"]
         found = []
         exe_paths = []
         final_paths = {}
