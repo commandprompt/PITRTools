@@ -58,6 +58,7 @@ classdict = (('state', 's', None),
             ('pgdata', 's', None),
             ('pgcontroldata', 's', ""),
             ('rsync_version', 'i', None),
+            ('includepath', 's', None),
             ('ssh_debug', 'b', False))
 
 
