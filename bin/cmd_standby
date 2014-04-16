@@ -155,7 +155,6 @@ class CMDStandby(CMDWorker):
                     if not os.access(f, os.F_OK | os.R_OK):
                         raise Exception("CONFIG: unable to read the failover file %s", str(f))
 
-    #
     # Create pg_xlog dir if missing, follow symlink if present
     # XXX: change os.stat to os.access
     def check_pgxlog_path_func(self):
