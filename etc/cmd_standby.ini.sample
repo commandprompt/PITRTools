@@ -26,12 +26,9 @@ sslmode: prefer
 ; Paths to use when searching for remote psql (also included when searching for local executables)
 path: /usr/bin:/usr/local/bin:/bin
 
-; set it if streaming replication is enabled
-pg_archivecleanup: /usr/lib/postgresql/9.0/bin/pg_archivecleanup
-
-; path to psql on the Master
-r_psql: /usr/lib/postgresql/8.4/bin/psql
-
+<<<<<<< HEAD
+=======
+>>>>>>> master
 ; Generalized information
 
 ; the port postgresql runs on (master)
