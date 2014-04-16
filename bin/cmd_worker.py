@@ -65,6 +65,14 @@ class CMDWorker:
         found = []
         exe_paths = []
         final_paths = {}
+
+        #Generator yielding joined paths of directories and filenames [used for searching]
+        def search(dirs, names):
+            for f in names:
+                for directory in dirs:
+                    abspath = os.path.join(directory, f)
+                    yield f,abspath
+
         #Populate list of executables to find depending on config values
         if not 'use_streaming_replication' in vars(self):
             exes.append("pg_standby")
@@ -78,20 +86,23 @@ class CMDWorker:
             path = os.environ['PATH'].split(os.pathsep)
         else:
             raise Exception("CONFIG: No PATH in environment, unable to locate executables.")
+        if not 'path' in vars(self):
+            raise Exception("CONFIG: No PATH in config, won't be able to find remote executables.")
+        else:
+            path.extend(self.path.split(os.pathsep))
         #Start searching
-        for exe in exes:
-            for directory in path:        
-                abspath = os.path.join(directory, exe)
-                if os.access(abspath, os.X_OK) and exe not in found:
-                    exe_paths.append(abspath)
-                    found.append(exe)
+        for exe,abspath in search(path, exes):
+            if os.access(abspath, os.X_OK) and exe not in found:
+                exe_paths.append(abspath)
+                found.append(exe)
+
         #Raise exception if we couldn't find all the executables
         if exes > found:
             raise Exception("CONFIG: Couldn't find executables: %s" % (", ".join(set(exes).difference(set(found)))))
+
         #Populate final dict of names to paths, assign to self
-        else:
-            for i, exe in enumerate(found):
-                final_paths[exe] = exe_paths[i]
+        for i, exe in enumerate(found):
+            final_paths[exe] = exe_paths[i]
         self.__dict__.update(final_paths)
 
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
