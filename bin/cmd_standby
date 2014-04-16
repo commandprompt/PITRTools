@@ -191,11 +191,7 @@ class CMDStandby(CMDWorker):
         self.pg_standby_flags = '-s5 -w0 -c '
         if self.debug:
             self.pg_standby_flags += '-d '
-
-        if self.pgversion == '8.2':
-            self.pg_standby_args = "%%f %%p -k%s " % (self.numarchives)
-        else:
-            self.pg_standby_args = "%f %p %r "
+        self.pg_standby_args = "%f %p %r "
 
     def set_connect_and_copy_options(self, options):
         # Yes the odd counted " is needed because of the way we have to quote within the command
