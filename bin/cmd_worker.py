@@ -92,7 +92,6 @@ class CMDWorker:
             unique = set(path).difference(set(includepath))
             path.extend(unique)
         #Start searching
-        print path
         for exe,abspath in search(path, exes):
             if os.access(abspath, os.X_OK) and exe not in found:
                 exe_paths.append(abspath)
