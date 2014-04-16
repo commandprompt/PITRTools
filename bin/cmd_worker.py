@@ -6,7 +6,6 @@ import os
 from optparse import *
 from ConfigParser import *
 
-
 class CMDWorker:
     """
     Base class for CMDArchiver and CMDStandby,
@@ -60,6 +59,58 @@ class CMDWorker:
             set_defaults_cb(result)
         self.__dict__.update(result)
 
+    #Get and set the required absolute paths for executables
+    def get_bin_paths_func(self, options):
+        exes = ["rsync", "pg_ctl", "psql", "ssh"]
+        found = []
+        exe_paths = []
+        final_paths = {}
+
+        #Generator yielding joined paths of directories and filenames [used for searching]
+        def search(dirs, names):
+            for f in names:
+                for directory in dirs:
+                    abspath = os.path.join(directory, f)
+                    yield f,abspath
+
+        #Populate list of executables to find depending on config values
+        if not 'use_streaming_replication' in vars(self):
+            exes.append("pg_standby")
+        else:
+            exes.append("pg_archivecleanup")
+            if options.recovertotime:
+##              raise ConfigError(...)
+                raise Exception("CONFIG: Unable to use recovery_target_time with streaming replication")
+
+        path = []
+        if "PATH" in os.environ:
+            envpath = os.environ['PATH'].split(os.pathsep)
+            path.extend(envpath)
+        if 'includepath' in vars(self):
+            includepath = self.includepath.split(os.pathsep)
+            if path:
+                unique = set(envpath).difference(set(includepath))
+                path.extend(unique)
+            else:
+                path.extend(includepath)
+        if not path:
+            raise Exception("CONFIG: No PATH in environment, and includepath not set in config. Can't find executables.")
+
+        #Start searching
+        for exe,abspath in search(path, exes):
+            if os.access(abspath, os.X_OK) and exe not in found:
+                exe_paths.append(abspath)
+                found.append(exe)
+
+        #Raise exception if we couldn't find all the executables
+        if exes > found:
+            raise Exception("CONFIG: Couldn't find executables: %s" % (", ".join(set(exes).difference(set(found)))))
+
+        #Populate final dict of names to paths, assign to self
+        for i, exe in enumerate(found):
+            final_paths[exe] = exe_paths[i]
+        self.__dict__.update(final_paths)
+
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
         Notify some external program (i.e. monitoring plugin)
@@ -112,7 +163,6 @@ if __name__ == '__main__':
                 help="Initialize master environment")))
 
     classdict = (('state', 's', None),
-                ('rsync_bin', 's', None),
                 ('rsync_flags', 's', ""),
                 ('slaves', 's', None),
                 ('user', 's', None),
@@ -126,9 +176,11 @@ if __name__ == '__main__':
                 ('pgdata', 's', None),
                 ('pgcontroldata', 's', ""),
                 ('rsync_version', 'i', None),
+                ('includepath', 's', None),
                 ('ssh_debug', 'b', False))
 
     worker = CMDWorker(classdict)
     (options, args) = worker.parse_commandline_arguments(argslist)
     worker.load_configuration_file(options.configfilename)
+    worker.get_bin_paths_func(options)
     print worker.__dict__

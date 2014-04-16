@@ -77,15 +77,9 @@ Configuration:
 
  [DEFAULT]
 
- pgversion: 8.4
+ pgversion: 9.0
 
 	What version of PostgreSQL are we running?
-
- numarchives: 10
-
-	Only valid if pgversion is 8.2. The number of archives to keep that is 
-	greater than checkpoint_segments. E.g. if checkpoint_segments is 3, the 
-	slave will keep 13.
 
  use_streaming_replication: off
 
@@ -119,33 +113,13 @@ Configuration:
 
 	See more at http://www.postgresql.org/docs/current/static/libpq-ssl.html
 
- ssh: /usr/bin/ssh
+ includepath: /usr/bin:/bin:/usr/local/bin
 
-	The absolute path to the ssh binary. You may also pass ssh
-        flags, such as -p to connect on a non-standard port.
-
- rsync: /usr/bin/rsync
-
-	The absolute path to the rsync binary.
+        Directories to include when searching for executables; separated by colons. Also used to locate remote psql executable on master.
 
  rsync_flags: -z
 
 	Optional flags to pass to rsync (compression, etc.)
-
- r_psql: /usr/lib/postgresql/8.4/bin/psql
-
-	The absolute path to the psql binary on the master.
-
- pg_standby: /usr/lib/postgresql/8.4/bin/pg_standby
-
-	The absolute path to the pg_standby binary
-
- pg_archivecleanup: /usr/lib/postgresql/9.0/bin/pg_archivecleanup
- 	The absolute path to the pg_archivecleanup binary. Unused on PostgreSQL 8.4 and below.
-
- pg_ctl: /usr/lib/postgresql/8.4/bin/pg_ctl
-
-	The absolute path to the pg_ctl binary.
 
  port: 5432
 
