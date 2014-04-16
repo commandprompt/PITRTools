@@ -28,16 +28,8 @@ repl_db_password: secret
 ; Default: sslmode: prefer
 sslmode: prefer
 
-
-
 ; Paths to use when searching for remote psql (also included when searching for local executables)
 path: /usr/bin:/usr/local/bin:/bin
-
-; set it for 9.0 and above if streaming replication is enabled
-pg_archivecleanup: /usr/lib/postgresql/9.0/bin/pg_archivecleanup
-
-; path to psql on the Master
-r_psql: /usr/lib/postgresql/8.4/bin/psql
 
 ; Generalized information
 
