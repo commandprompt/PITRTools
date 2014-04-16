@@ -91,8 +91,7 @@ class CMDWorker:
                 includepath = self.includepath.split(os.pathsep)
                 unique = set(envpath).difference(set(includepath))
                 path.extend(unique)
-            else:
-                path.extend(envpath)
+            path.extend(envpath)
 
         #Start searching
         for exe,abspath in search(path, exes):
