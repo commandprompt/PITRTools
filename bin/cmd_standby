@@ -59,7 +59,7 @@ classdict = (('pgversion', 's', None),
              ('port', 'i', None),
              ('ssh_timeout', 'i', None),
              ('archivedir', 's', None),
-             ('path', 's', None),
+             ('includepath', 's', None),
              ('pgdata', 's', None),
              ('pg_conf', 's', ""),
              ('pg_hba_conf', 's', ""),
@@ -116,9 +116,9 @@ class CMDStandby(CMDWorker):
     def get_remote_psql(self):
         """Get path to psql on master"""
         if 'master_public_ip' in vars(self):
-            if 'path' not in vars(self):
+            if 'includepath' not in vars(self):
                 raise Exception("CONFIG: No path in config file, can't find executables")
-            path = " ".join(self.path.split(os.pathsep))
+            path = " ".join(self.includepath.split(os.pathsep))
             ssh = '%s -o PasswordAuthentication=no %s' % (self.ssh, self.master_public_ip)
             getpaths = subprocess.check_output('%s "find %s -ignore_readdir_race -name psql"' % (ssh, path), shell=True)
             getpaths = getpaths.strip().split("\n")
