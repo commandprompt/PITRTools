@@ -173,6 +173,7 @@ if __name__ == '__main__':
                 ('pgdata', 's', None),
                 ('pgcontroldata', 's', ""),
                 ('rsync_version', 'i', None),
+                ('includepath', 's', None),
                 ('ssh_debug', 'b', False))
 
     worker = CMDWorker(classdict)
