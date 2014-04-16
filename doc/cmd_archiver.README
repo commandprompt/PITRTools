@@ -160,15 +160,10 @@ cmd_archiver.ini options:
 	This is also used when you want to archive all files locally. For
 	example, if you are using an NFS mount for the standby server to get its
 	files.
- ssh:
 
-	The path to ssh. It should be the absolute path. You may also pass ssh
-	flags, such as -p to connect on a non-standard port.
-
- rsync_bin: /usr/bin/rsync			
-
-	Must point to the actual binary of rsync. We use rsync over ssh, so don't
-	bother with an rsync server.
+ includepath: /usr/bin:/bin:/usr/local/bin
+ 
+        Directories to be included in search paths for executables; separated by colons
 
  rsync_flags: -z
 
