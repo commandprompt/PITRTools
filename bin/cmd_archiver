@@ -351,6 +351,8 @@ if __name__ == '__main__':
         print "We are initializing queues, one moment.\n"
         success = archiver.init_env_func()
     else:
+        #Get binary paths and check config values
+        archiver.get_bin_paths_func(options)
         success = archiver.check_config_func()
         if success:
             success = archiver.archive_func()
