@@ -113,7 +113,7 @@ class CMDArchiver(CMDWorker):
         """
         if self.debug:
             print "NOTICE: check_config_func()"
-        pathvars = [self.rsync_bin, self.pgdata, self.l_archivedir]
+        pathvars = [self.rsync, self.pgdata, self.l_archivedir]
         for element in pathvars:
             try:
                 os.stat("%s" % (str(element)))
@@ -209,7 +209,7 @@ class CMDArchiver(CMDWorker):
                 source_or_sent = "--remove-sent-files"
             else:
                 source_or_sent = "--remove-source-files"
-            queue_transfer = """%s %s -aq %s -e \"%s %s\" %s/ %s@%s:%s/""" % (str(self.rsync_bin), str(self.rsync_flags), str(source_or_sent), str(self.ssh), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
+            queue_transfer = """%s %s -aq %s -e \"%s %s\" %s/ %s@%s:%s/""" % (str(self.rsync), str(self.rsync_flags), str(source_or_sent), str(self.ssh), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
             retval = os.system(queue_transfer)
             if self.debug:
                 print "NOTICE: Transfering queue = " + queue_transfer
@@ -257,7 +257,7 @@ class CMDArchiver(CMDWorker):
                     if self.debug:
                         print "NOTICE: Saving archives to queue"
                     queue_dir = self.l_archivedir + "/" + str(host)
-                    queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(queue_dir))
+                    queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
                     retval = os.system(queue_transfer)
                     if retval:
                         self.notify_external(critical=True, message=str(retval))
@@ -281,14 +281,14 @@ class CMDArchiver(CMDWorker):
                 if self.debug:
                     print "NOTICE: Archiving for: " + str(host)
                 if self.flush:
-                    rsync_transfer = """%s %s %s/pg_xlog/* -e "%s %s"  %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.pgdata), str(self.ssh), str(self.ssh_flags), str(self.user), str(host), str(self.r_archivedir))
+                    rsync_transfer = """%s %s %s/pg_xlog/* -e "%s %s"  %s@%s:%s""" % (str(self.rsync), str(self.rsync_flags), str(self.pgdata), str(self.ssh), str(self.ssh_flags), str(self.user), str(host), str(self.r_archivedir))
                     self.flush_check_func()
                     check = self.check_pgpid_func()
                     if check == 0:
                         print "ERROR: Can not enter flush mode if PG is already running"
                         raise ArchiveFailure
                 else:
-                    rsync_transfer = """%s %s -q -e "%s %s" %s %s@%s:%s""" % (str(self.rsync_bin), str(self.rsync_flags), str(self.ssh), str(self.ssh_flags), str(self.archivefile), str(self.user), str(host), str(self.r_archivedir))
+                    rsync_transfer = """%s %s -q -e "%s %s" %s %s@%s:%s""" % (str(self.rsync), str(self.rsync_flags), str(self.ssh), str(self.ssh_flags), str(self.archivefile), str(self.user), str(host), str(self.r_archivedir))
                 if self.debug:
                     print "NOTICE: Shipping archive to: " + str(host)
                     print "NOTICE: Using: " + rsync_transfer
@@ -300,7 +300,7 @@ class CMDArchiver(CMDWorker):
                         raise ArchiveFailure
                     print "NOTICE: no luck shipping archive"
                     queue_dir = self.l_archivedir + "/" + str(host)
-                    queue_transfer = """%s %s %s""" % (str(self.rsync_bin), str(self.archivefile), str(queue_dir))
+                    queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
                     retval = os.system(queue_transfer)
                     if retval:
                         print "FATAL: Unable to rsync_transfer or queue_transfer"
