@@ -26,9 +26,6 @@ sslmode: prefer
 ; Paths to use when searching for remote psql (also included when searching for local executables)
 path: /usr/bin:/usr/local/bin:/bin
 
-<<<<<<< HEAD
-=======
->>>>>>> master
 ; Generalized information
 
 ; the port postgresql runs on (master)
@@ -56,7 +53,7 @@ ssh_timeout: 30
 archivedir: /var/lib/postgresql/archive
 
 ; where you executed initdb -D to
-pgdata: /var/lib/postgresql/8.4/main
+pgdata: /var/lib/postgresql/9.0/main
 
 
 
