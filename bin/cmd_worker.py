@@ -88,9 +88,11 @@ class CMDWorker:
             raise Exception("CONFIG: No PATH in environment, unable to locate executables.")
         if 'includepath' in vars(self):
             #Make sure we don't accidentally put some duplicates in the list
-            unique = set(self.includepath).difference(set(path))
-            path = path.extend(unique)
+            includepath = self.includepath.split(os.pathsep)
+            unique = set(path).difference(set(includepath))
+            path.extend(unique)
         #Start searching
+        print path
         for exe,abspath in search(path, exes):
             if os.access(abspath, os.X_OK) and exe not in found:
                 exe_paths.append(abspath)
