@@ -32,6 +32,7 @@ import os
 import shutil
 import sys
 import re
+import subprocess
 
 from sys import *
 from os import system
@@ -49,32 +50,33 @@ argslist = (("-A", "--action", dict(dest="pgctl_action", action="store", help="S
             ("-S", "--standby", dict(dest="standby", action="store_true", help="Enter standby mode", metavar="FILE")))
 
 classdict = (('pgversion', 's', None),
-           ('rsync_flags', 's', ""),
-           ('master_public_ip', 's', None),
-           ('master_local_ip', 's', ""),
-           ('user', 's', None),
-           ('debug', 'b', False),
-           ('ssh_debug', 'b', False),
-           ('port', 'i', None),
-           ('ssh_timeout', 'i', None),
-           ('archivedir', 's', None),
-           ('pgdata', 's', None),
-           ('pg_conf', 's', ""),
-           ('pg_hba_conf', 's', ""),
-           ('pg_conf_failover', 's', ""),
-           ('pg_hba_conf_failover', 's', ""),
-           ('no_copy_conf', 'b', False),
-           ('recovery_conf', 's', ""),
-           ('logfile', 's', ""),
-           ('action_failover', 's', ""),
-           ('use_streaming_replication', 'b', False),
-           ('trigger_file', 's', ""),
-           ('repl_db_user', 's', 'postgres'),
-           ('repl_db_password', 's', ""),
-           ('sslmode', 's', 'prefer'),
-           ('notify_ok', 's', None),
-           ('notify_warning', 's', None),
-           ('notify_critical', 's', None))
+             ('rsync_flags', 's', ""),
+             ('master_public_ip', 's', None),
+             ('master_local_ip', 's', ""),
+             ('user', 's', None),
+             ('debug', 'b', False),
+             ('ssh_debug', 'b', False),
+             ('port', 'i', None),
+             ('ssh_timeout', 'i', None),
+             ('archivedir', 's', None),
+             ('path', 's', None),
+             ('pgdata', 's', None),
+             ('pg_conf', 's', ""),
+             ('pg_hba_conf', 's', ""),
+             ('pg_conf_failover', 's', ""),
+             ('pg_hba_conf_failover', 's', ""),
+             ('no_copy_conf', 'b', False),
+             ('recovery_conf', 's', ""),
+             ('logfile', 's', ""),
+             ('action_failover', 's', ""),
+             ('use_streaming_replication', 'b', False),
+             ('trigger_file', 's', ""),
+             ('repl_db_user', 's', 'postgres'),
+             ('repl_db_password', 's', ""),
+             ('sslmode', 's', 'prefer'),
+             ('notify_ok', 's', None),
+             ('notify_warning', 's', None),
+             ('notify_critical', 's', None))
 
 
 class RsyncFailure(Exception):
@@ -110,6 +112,20 @@ class CMDStandby(CMDWorker):
             valid_action = ['start', 'stop', 'stop_basebackup', 'start_basebackup']
             if options.pgctl_action not in valid_action:
                 parser.error("option -A requires one of start, stop, stop_basebackup or start_basebackup")
+
+    def get_remote_psql(self):
+        """Get path to psql on master"""
+        if 'master_public_ip' in vars(self):
+            if 'path' not in vars(self):
+                raise Exception("CONFIG: No path in config file, can't find executables")
+            path = " ".join(self.path.split(os.pathsep))
+            ssh = '%s -o PasswordAuthentication=no %s' % (self.ssh, self.master_public_ip)
+            getpaths = subprocess.check_output('%s "find %s -ignore_readdir_race -name psql"' % (ssh, path), shell=True)
+            getpaths = getpaths.strip().split("\n")
+            if getpaths:
+                self.psql = getpaths[0]
+            else:
+                raise Exception("Couldn't find remote psql")
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
@@ -616,6 +632,8 @@ if __name__ == '__main__':
         cfg_vals = standby.load_configuration_file(configfilename)
         # Locate executables
         standby.get_bin_paths_func(options)
+        # Locate executables on master
+        standby.get_remote_psql()
         # Before we do anything, let's check the configuration
         standby.check_config_func(options)
         # Configure ssh command-line string, rsync options,
