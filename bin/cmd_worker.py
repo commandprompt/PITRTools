@@ -83,15 +83,18 @@ class CMDWorker:
                 raise Exception("CONFIG: Unable to use recovery_target_time with streaming replication")
 
         path = []
-        if "includepath" not in vars(self) and "PATH" not in os.environ:
-            raise Exception("CONFIG: includepath not set, and no $PATH in environment. Unable to locate executables.")
         if "PATH" in os.environ:
             envpath = os.environ['PATH'].split(os.pathsep)
-            if 'includepath' in vars(self):
-                includepath = self.includepath.split(os.pathsep)
+            path.extend(envpath)
+        if 'includepath' in vars(self):
+            includepath = self.includepath.split(os.pathsep)
+            if path:
                 unique = set(envpath).difference(set(includepath))
                 path.extend(unique)
-            path.extend(envpath)
+            else:
+                path.extend(includepath)
+        if not path:
+            raise Exception("CONFIG: No PATH in environment, and includepath not set in config. Can't find executables.")
 
         #Start searching
         for exe,abspath in search(path, exes):
