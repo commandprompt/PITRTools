@@ -123,7 +123,7 @@ class CMDStandby(CMDWorker):
             getpaths = subprocess.check_output('%s "find %s -ignore_readdir_race -name psql"' % (ssh, path), shell=True)
             getpaths = getpaths.strip().split("\n")
             if getpaths:
-                self.psql = getpaths[0]
+                self.r_psql = getpaths[0]
             else:
                 raise Exception("Couldn't find remote psql")
 
