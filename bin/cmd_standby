@@ -129,6 +129,8 @@ class CMDStandby(CMDWorker):
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
+        if int(self.pgversion[0]) < 9:
+            raise Exception('CONFIG: PITRTools only supports PostgreSQL versions 9.0+')
         pathvars = [self.rsync, self.pg_ctl, self.pg_conf, self.pg_hba_conf, self.archivedir]
         if not self.use_streaming_replication:
             pathvars.append(self.pg_standby)
@@ -155,7 +157,6 @@ class CMDStandby(CMDWorker):
                     if not os.access(f, os.F_OK | os.R_OK):
                         raise Exception("CONFIG: unable to read the failover file %s", str(f))
 
-    #
     # Create pg_xlog dir if missing, follow symlink if present
     # XXX: change os.stat to os.access
     def check_pgxlog_path_func(self):
@@ -191,11 +192,7 @@ class CMDStandby(CMDWorker):
         self.pg_standby_flags = '-s5 -w0 -c '
         if self.debug:
             self.pg_standby_flags += '-d '
-
-        if self.pgversion == '8.2':
-            self.pg_standby_args = "%%f %%p -k%s " % (self.numarchives)
-        else:
-            self.pg_standby_args = "%f %p %r "
+        self.pg_standby_args = "%f %p %r "
 
     def set_connect_and_copy_options(self, options):
         # Yes the odd counted " is needed because of the way we have to quote within the command

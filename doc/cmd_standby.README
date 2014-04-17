@@ -10,7 +10,7 @@
 
  * Easily take a base backup, including table spaces
  * Restore archives
- * Automatically purge old archives (if PostgreSQL >8.3)
+ * Automatically purge old archives
  * Alert based on failures
  * Stop and start PostgreSQL standby
  * Failover to the latest restore point and point-in-time recovery
@@ -79,7 +79,7 @@ Configuration:
 
  pgversion: 9.0
 
-	What version of PostgreSQL are we running?
+	What version of PostgreSQL are we running? NOTE: Versions below 9.0 are not compatible.
 
  use_streaming_replication: off
 
@@ -153,7 +153,7 @@ Configuration:
 
 	This is where cmd_archiver is copying files from the master to the standby.
 
- pgdata: /var/lib/postgresql/8.4/main
+ pgdata: /var/lib/postgresql/9.0/main
 
 	The absolute path to your cluster directory.
 
@@ -181,7 +181,7 @@ Configuration:
 	to on to make postgres actually use the above conf files without
 	copying them to pgdata.
 
- recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
+ recovery_conf: /var/lib/postgresql/9.0/main/recovery.conf
 
 	The absolute path to the recovery.conf to create when we failover.
 	This defaults to %(pgdata)/recovery.conf
