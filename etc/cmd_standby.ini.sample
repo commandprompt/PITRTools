@@ -49,13 +49,14 @@ ssh_debug: off
 ; the timeout for ssh before we throw an alarm
 ssh_timeout: 30
 
+; Number of threads to use for rsync during base backups. 1 disables multi-threading entirely.
+rsync_threads: 2
+
 ; should be the same as r_archivedir for archiver
 archivedir: /var/lib/postgresql/archive
 
 ; where you executed initdb -D to
 pgdata: /var/lib/postgresql/9.0/main
-
-
 
 ; Confs
 
@@ -93,10 +94,7 @@ recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
 ;
 ;logfile: /var/log/postgresql/postgresql.log
 
-
-
 ; Alarms
-
 
 notify_critical: echo CRITICAL
 notify_warning: echo WARNING

@@ -51,6 +51,7 @@ argslist = (("-A", "--action", dict(dest="pgctl_action", action="store", help="S
 
 classdict = (('pgversion', 's', None),
              ('rsync_flags', 's', ""),
+             ('rsync_threads', 'i', ""),
              ('master_public_ip', 's', None),
              ('master_local_ip', 's', ""),
              ('user', 's', None),
