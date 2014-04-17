@@ -1,16 +1,11 @@
 [DEFAULT]
 
 ; what major version are we using?
-pgversion: 8.4
-
-; Used for PostgreSQL version 8.2 and below, should be set 
-; to something > than checkpoint_segments on master
-numarchives: 10
+pgversion: 9.0
 
 ; Whether or not to use streaming replication.  If this is set to "on"
 ; pitrtools will configure the standby server to replicate from master
 ; using streaming replication.
-; This can only be used with PostgreSQL 9.0 and up.
 use_streaming_replication: off
 
 ; File to touch to end replication when using streaming replication.
@@ -58,7 +53,7 @@ ssh_timeout: 30
 archivedir: /var/lib/postgresql/archive
 
 ; where you executed initdb -D to
-pgdata: /var/lib/postgresql/8.4/main
+pgdata: /var/lib/postgresql/9.0/main
 
 
 

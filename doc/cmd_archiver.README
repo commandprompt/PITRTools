@@ -139,7 +139,7 @@ cmd_archiver.ini options:
 	offline. However, this can cause you to accidently fill up your postgres
 	partition, so use with care.
 
- pgdata: /var/lib/postgresql/8.4/main
+ pgdata: /var/lib/postgresql/9.0/main
 
 	The base database directory. This is the PGDATA on the archiving machine.
 
