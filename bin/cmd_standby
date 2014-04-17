@@ -129,6 +129,8 @@ class CMDStandby(CMDWorker):
 
     # Let's make sure executables can be reached
     def check_config_func(self, options):
+        if int(self.pgversion[0]) < 9:
+            raise Exception('CONFIG: PITRTools only supports PostgreSQL versions 9.0+')
         pathvars = [self.rsync, self.pg_ctl, self.pg_conf, self.pg_hba_conf, self.archivedir]
         if not self.use_streaming_replication:
             pathvars.append(self.pg_standby)
