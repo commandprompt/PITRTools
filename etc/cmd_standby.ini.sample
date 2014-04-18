@@ -24,7 +24,7 @@ repl_db_password: secret
 sslmode: prefer
 
 ; Paths to use when searching for remote psql (also included when searching for local executables)
-path: /usr/bin:/usr/local/bin:/bin
+includepath: /usr/bin:/usr/local/bin:/bin
 
 ; Generalized information
 
