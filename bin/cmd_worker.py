@@ -89,7 +89,7 @@ class CMDWorker:
         if 'includepath' in vars(self):
             includepath = self.includepath.split(os.pathsep)
             if path:
-                unique = set(envpath).difference(set(includepath))
+                unique = set(includepath).difference(set(envpath))
                 path.extend(unique)
             else:
                 path.extend(includepath)
@@ -103,7 +103,7 @@ class CMDWorker:
                 found.append(exe)
 
         #Raise exception if we couldn't find all the executables
-        if exes > found:
+        if len(exes) > len(found):
             raise Exception("CONFIG: Couldn't find executables: %s" % (", ".join(set(exes).difference(set(found)))))
 
         #Populate final dict of names to paths, assign to self
