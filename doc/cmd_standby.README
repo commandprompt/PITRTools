@@ -121,6 +121,10 @@ Configuration:
 
 	Optional flags to pass to rsync (compression, etc.)
 
+ rsync_threads: 2
+
+        Number of rsync threads to use when performing a base backup.
+
  port: 5432
 
 	The port on the master that PostgreSQL is listening
