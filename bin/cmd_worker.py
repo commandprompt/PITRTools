@@ -126,16 +126,23 @@ class CMDWorker:
         about an event occured. The program itself can be set
         via notify_* configuration options.
         """
+        if not True in (ok, warning, critical):
+            return
         if ok:
             exec_str = "%s" % (self.notify_ok,)
+            loglevel="NOTICE"
         elif warning:
             exec_str = "%s" % (self.notify_warning,)
+            loglevel="WARNING"
         elif critical:
             exec_str = "%s" % (self.notify_critical,)
+            loglevel="CRITICAL"
         if message:
             exec_str += " %s" % (message,)
-        if ok or warning or critical:
-            os.system(exec_str)
+            self.log(message, loglevel)
+
+        self.dlog("notify_external exec_str: %s" % exec_str)
+        os.system(exec_str)
 
     def check_pgpid_func(self):
         """
