@@ -3,6 +3,7 @@
 # Base class for CMDStandby and CMDArchiver.
 
 import os
+import time
 from optparse import *
 from ConfigParser import *
 
@@ -110,6 +111,14 @@ class CMDWorker:
         for i, exe in enumerate(found):
             final_paths[exe] = exe_paths[i]
         self.__dict__.update(final_paths)
+
+    def log(self, msg, level="NOTICE"):
+        timestamp = time.strftime("%b.%d.%Y %R:%S")
+        print "[%s] %s: %s" % (timestamp, level, msg)
+
+    def debuglog(self, msg):
+        if self.debug:
+            self.log(msg, "DEBUG")
 
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
