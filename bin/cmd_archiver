@@ -121,7 +121,8 @@ class CMDArchiver(CMDWorker):
             except OSError, e:
                 print "Config %s:  %s" % (str(element), str(e))
                 return False
-            return True
+        return True
+
     def get_pgcontroldata_func(self):
         """
         get_pgcontroldata_func doesn't actually do anything yet. This is more
