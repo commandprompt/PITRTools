@@ -3,6 +3,9 @@
 # Base class for CMDStandby and CMDArchiver.
 
 import os
+import sys
+import time
+import traceback
 from optparse import *
 from ConfigParser import *
 
@@ -113,6 +116,10 @@ class CMDWorker:
         for i, exe in enumerate(found):
             final_paths[exe] = exe_paths[i]
         self.__dict__.update(final_paths)
+
+    def pull_exception(self):
+        exc = sys.exc_info()
+        return traceback.format_exc(exc[2])
 
     def log(self, msg, level="NOTICE"):
         """
