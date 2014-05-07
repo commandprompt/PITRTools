@@ -3,8 +3,6 @@
 # Base class for CMDStandby and CMDArchiver.
 
 import os
-import time
-import subprocess
 from optparse import *
 from ConfigParser import *
 
@@ -152,16 +150,12 @@ class CMDWorker:
             return
         if not filter(len, [self.notify_ok, self.notify_warning, self.notify_critical]):
             return
-
         if ok:
             exec_str = "%s" % (self.notify_ok,)
-            loglevel="NOTICE"
         elif warning:
             exec_str = "%s" % (self.notify_warning,)
-            loglevel="WARNING"
         elif critical:
             exec_str = "%s" % (self.notify_critical,)
-            loglevel="CRITICAL"
         if message:
             exec_str ="%s %s" % (exec_str, message,)
             if log:
