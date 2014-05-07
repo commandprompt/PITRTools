@@ -15,6 +15,9 @@ class CMDWorker:
 
     def __init__(self, classdict):
         self.classdict = classdict
+        self.pitr_bin_path = os.path.realpath(
+            os.path.join(os.getcwd(), os.path.dirname(__file__))
+        )
 
     @staticmethod
     def parse_commandline_arguments(argslist, options_check_cb=None,

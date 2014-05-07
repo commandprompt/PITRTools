@@ -416,11 +416,13 @@ class CMDStandby(CMDWorker):
     def base_backup_func(self):
         # first, copy tablespaces
         paths = self.primary_get_tablespace_paths()
+        trsync_path = os.path.join(self.pitr_bin_path, "threaded_rsync.py")
+
         for row in paths:
             if self.debug:
                 print "DEBUG: " + row
             row = row.rstrip('\n')
-            retval = system("./threaded_rsync.py --num_threads %s '%s%s/ %s/'" % (self.rsync_threads, self.copy_dirs, row, row))
+            retval = subprocess.call("%s --num_threads %s '%s%s/ %s/'" % (trsync_path, self.rsync_threads, self.copy_dirs, row, row))
             if retval and retval != 23 and retval != 24: # 23, 24 incomplete or vanished source file.
                 raise RsyncFailure
         # finally, copy over pgdata
@@ -431,7 +433,7 @@ class CMDStandby(CMDWorker):
             if self.debug:
                 print "DEBUG: cleaning up " + master_pgdata + "/pg_xlog/ directory before rsync"
             os.system("rm -rf " + self.pgdata + "/pg_xlog/*")
-        retval = system("./threaded_rsync.py --num_threads %s '%s%s/ %s/'" % (self.rsync_threads, self.copy_dirs, master_pgdata, self.pgdata))
+        retval = subprocess.call("%s --num_threads %s '%s%s/ %s/'" % (trsync_path, self.rsync_threads, self.copy_dirs, master_pgdata, self.pgdata))
         if retval and retval != 23 and retval != 24:
             raise RsyncFailure
 
