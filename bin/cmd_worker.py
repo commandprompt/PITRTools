@@ -3,8 +3,6 @@
 # Base class for CMDStandby and CMDArchiver.
 
 import os
-import time
-import subprocess
 from optparse import *
 from ConfigParser import *
 
@@ -116,37 +114,22 @@ class CMDWorker:
             final_paths[exe] = exe_paths[i]
         self.__dict__.update(final_paths)
 
-    def log(self, msg, level="NOTICE"):
-        timestamp = time.strftime("%b.%d.%Y %R:%S")
-        print "[%s] %s: %s" % (timestamp, level, msg)
-
-    def debuglog(self, msg):
-        if self.debug:
-            self.log(msg, "DEBUG")
-
     def notify_external(self, ok=False, warning=False, critical=False, message=None):
         """
         Notify some external program (i.e. monitoring plugin)
         about an event occured. The program itself can be set
         via notify_* configuration options.
         """
-        if not True in (ok, warning, critical):
-            return
         if ok:
             exec_str = "%s" % (self.notify_ok,)
-            loglevel="NOTICE"
         elif warning:
             exec_str = "%s" % (self.notify_warning,)
-            loglevel="WARNING"
         elif critical:
             exec_str = "%s" % (self.notify_critical,)
-            loglevel="CRITICAL"
         if message:
             exec_str += " %s" % (message,)
-            self.log(message, loglevel)
-
-        self.debuglog("notify_external exec_str: %s" % exec_str)
-        subprocess.call(exec_str)
+        if ok or warning or critical:
+            os.system(exec_str)
 
     def check_pgpid_func(self):
         """
