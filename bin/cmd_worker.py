@@ -190,9 +190,9 @@ class CMDWorker:
 
     # set up our ssh transfer timeout and debug options
     def set_ssh_flags(self):
-        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (self.ssh_timeout,)
+        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (self.ssh_timeout,)
         if self.ssh_debug:
-            self.ssh_flags += '-vvv '
+            self.ssh_flags += "-vvv"
 
 
 if __name__ == '__main__':
