@@ -28,11 +28,10 @@ PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 import os
 import re
 import sys
-
+import subprocess
 from os import *
 from sys import *
 from cmd_worker import CMDWorker
-
 
 argslist = (('-F', '--file', dict(dest="archivefilename",
                 action="store", help="Archive file", metavar="FILE")),
@@ -254,11 +253,20 @@ class CMDArchiver(CMDWorker):
 
         #Work with one slave at a time
         slave = slaves.pop()
-        log_transfer = '%s %s -q -e "%s %s" %s %s@%s:%s' % (self.rsync, self.rsync_flags, self.ssh, self.ssh_flags, 
-                                                            self.archivefile, self.user, slave, self.r_archivedir)
+        self.debuglog("ship_log_func: Slaves after pop(): %s" % slaves)
+        archivepath = os.path.join(self.pgdata, self.archivefile)
+        rsync_flags_list = self.rsync_flags.split()
+
+        log_transfer_cmd = [self.rsync]
+        log_transfer_cmd.extend(rsync_flags_list)
+        log_transfer_cmd.extend(['-q', '-e', '%s %s' % (self.ssh, self.ssh_flags), archivepath,
+                                 '%s@%s:%s' % (self.user, slave, self.r_archivedir)])
         
-        self.debuglog("ship_log_func: Shipping log via: %s" % log_transfer)
-        ret = subprocess.call(log_transfer)
+        self.log("Shipping %s to %s" % (self.archivefile, slave))
+        self.debuglog("ship_log_func: Shipping log via: %s" % log_transfer_cmd)
+        ret = subprocess.check_output(log_transfer_cmd)
+        self.log(ret)
+        return
         if ret:
             #Rsync returned non-zero exit status
             self.notify_external(log=True, critical=True, message="ship_log_func: rsync error %d" % ret)
@@ -333,7 +341,7 @@ if __name__ == '__main__':
                 archiver.archive_func()
             except:
                 success = 0
-                print "ERROR: %s" % sys.exc_info
+                print archiver.pull_exception()
     if success:
         sys.exit(0)
     else:
