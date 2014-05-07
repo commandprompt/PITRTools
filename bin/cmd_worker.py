@@ -4,6 +4,7 @@
 
 import os
 import time
+import subprocess
 from optparse import *
 from ConfigParser import *
 
@@ -144,8 +145,8 @@ class CMDWorker:
             exec_str += " %s" % (message,)
             self.log(message, loglevel)
 
-        self.dlog("notify_external exec_str: %s" % exec_str)
-        os.system(exec_str)
+        self.debuglog("notify_external exec_str: %s" % exec_str)
+        subprocess.call(exec_str)
 
     def check_pgpid_func(self):
         """
