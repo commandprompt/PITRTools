@@ -264,9 +264,7 @@ class CMDArchiver(CMDWorker):
         
         self.log("Shipping %s to %s" % (self.archivefile, slave))
         self.debuglog("ship_log_func: Shipping log via: %s" % log_transfer_cmd)
-        ret = subprocess.check_output(log_transfer_cmd)
-        self.log(ret)
-        return
+        ret = subprocess.call(log_transfer_cmd)
         if ret:
             #Rsync returned non-zero exit status
             self.notify_external(log=True, critical=True, message="ship_log_func: rsync error %d" % ret)
