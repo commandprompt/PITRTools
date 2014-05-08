@@ -239,7 +239,7 @@ class CMDArchiver(CMDWorker):
             #Rsync returned non-zero exit status. 
             self.notify_external(log=True, critical=True, message="queue_log_func: rsync error %d" % ret)
             raise ArchiveFailure
-        self.notify_external(ok=True, message="%d" % ret)
+        self.notify_external(ok=True, message="0")
         if slaves:
             #Recurse if more slaves need to be queued to
             self.queue_log_func(queues)
@@ -271,7 +271,7 @@ class CMDArchiver(CMDWorker):
             #Rsync returned non-zero exit status
             self.notify_external(log=True, critical=True, message="ship_log_func: rsync error %d" % ret)
             self.queue_log_func(slave)
-        self.notify_external(log=True, ok=True, message="%d" % ret)
+        self.notify_external(log=True, ok=True, message="0")
         if slaves:
             self.ship_log_func(slaves)
             
