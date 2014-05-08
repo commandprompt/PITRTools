@@ -221,15 +221,13 @@ class CMDArchiver(CMDWorker):
                 rtn.append(host)
         return rtn
 
-    def queue_log_func(self, slaves):
+    def queue_log_func(self, slave):
         """
-        Queue the current log file (self.archivefile) to a set of slaves.
+        Queue the current log file (self.archivefile) to a slave.
         
-        slaves is either a list of slaves to queue for, or a single string denoting a slave.
+        slave is name of slave to queue for
         """
 
-        #Work with one slave at a time
-        slave = slaves.pop() if type(slaves) is list else [slaves]
         queue_dir = os.path.join(self.l_archivedir, slave)
         queue_transfer = "%s %s %s" % (self.rsync, self.archivefile, queue_dir)
 
@@ -240,20 +238,14 @@ class CMDArchiver(CMDWorker):
             self.notify_external(log=True, critical=True, message="queue_log_func: rsync error %d" % ret)
             raise ArchiveFailure
         self.notify_external(ok=True, message="0")
-        if slaves:
-            #Recurse if more slaves need to be queued to
-            self.queue_log_func(queues)
         
-    def ship_log_func(self, slaves):
+    def ship_log_func(self, slave):
         """
-        Ship the current log file (self.archivefile) to a set of slaves.
+        Ship the current log file (self.archivefile) to a slave. Queue the log for them if we fail.
 
-        slaves is a list of slaves to queue for.
+        slave is name of slave to queue for
         """
 
-        #Work with one slave at a time
-        slave = slaves.pop()
-        self.debuglog("ship_log_func: Slaves after pop(): %s" % slaves)
         archivepath = os.path.join(self.pgdata, self.archivefile)
         rsync_flags_list = self.rsync_flags.split()
 
@@ -270,9 +262,27 @@ class CMDArchiver(CMDWorker):
             self.notify_external(log=True, critical=True, message="ship_log_func: rsync error %d" % ret)
             self.queue_log_func(slave)
         self.notify_external(log=True, ok=True, message="0")
-        if slaves:
-            self.ship_log_func(slaves)
             
+    def handle_queues(self):
+        """
+        Try to ship any existing slave queues. If we cannot send to a slave, queue self.archivefile for them.
+        
+        Returns a list of slaves that were not queued to.
+        """
+
+        slaves = self.generate_slave_list_func()
+        failed_slaves = self.send_queue_func()
+        if not failed_slaves:
+            return []
+        self.notify_external(log=True,
+                             warning=True, 
+                             message="Couldn't send existing queues for hosts: %s. Queueing %s for them." % (", ".join(failed_slaves), self.archivefile))            
+        for slave in failed_slaves:
+            self.queue_log_func(slave)
+
+        #Don't try to ship a log if we just queued it
+        return set(slaves).difference(set(failed_slaves))
+
     def archive_func(self):
         """
         The main archive function.
@@ -289,19 +299,15 @@ class CMDArchiver(CMDWorker):
             self.notify_external(log=True, warning=True, message="cmd_archiver offline, queuing archives")
             return False
 
-        slaves = self.generate_slave_list_func()
-        #Attempt to send any logs still in the queues
-        queues = self.send_queue_func()
-        if queues:
-            #Some hosts queues couldn't be sent, queue current log
-            self.notify_external(log=True,
-                                 warning=True, 
-                                 message="Couldn't send existing queues for hosts: %s. Queueing %s for them." % (", ".join(queue), self.archivefile))
-            self.queue_log_func(queues) 
+
+        #Send any existing queues, and queue to any that failed.
+        slaves = self.handle_queues()
 
         #Attempt to ship self.archivefile to slaves
-        self.ship_log_func(slaves)
-        self.debuglog("archive_func: archiving of %s handled successfully" % self.archivefile)
+        for slave in slaves:
+            self.ship_log_func(slave)
+
+        self.log("Archiving of %s handled successfully" % self.archivefile)
         
 if __name__ == '__main__':
 
