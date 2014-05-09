@@ -548,9 +548,12 @@ class CMDStandby(CMDWorker):
         else:
             try:
                 self.start_backup_func()
+                self.debuglog("start_backup_func() handled")
                 self.base_backup_func()
+                self.debuglog("base_backup_func() handled")
                 if self.check_pgxlog_path_func():
                     result = True
+                    self.debuglog("check_pgxlog_path_func() handled")
                 else:
                     self.notify_external(critical=True, message="unable to access xlog path")
             except RsyncFailure:
