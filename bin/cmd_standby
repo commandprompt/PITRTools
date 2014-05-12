@@ -171,15 +171,13 @@ class CMDStandby(CMDWorker):
             success = True
         except:
             try:
-                if self.debug:
-                    print "creating pg_xlog directory: %s" % (pg_xlog_dir)
+                self.debuglog("check_pgxlog_path_func(): pg_xlog_dir = %s" % pg_xlog_dir)
                 os.makedirs(pg_xlog_dir, 0700)
             except OSError, e:
-                print "ERROR: %s" % (str(e))
-                print "HINT: You may have permission problems"
-                print "Make sure that %s has the ability to create the directory %s" % ((str(self.user), (str(pg_xlog_dir))))
+                self.log("check_pgxlog_path_func(): %s" % e, "ERROR")
+                self.log("You may have permission problems; Make sure user %s can create directory %s" % (self.user, pg_xlog_dir))
             except Exception, e:
-                print "ERROR:", e
+                self.log("check_pgxlog_path_func(): %s" % e, "ERROR")
             else:
                 success = True
         return success
@@ -278,16 +276,15 @@ class CMDStandby(CMDWorker):
         try:
             output = self.exec_query_on_primary("""'SELECT 1'""", False)
         except RemoteNoData, e:
-            print "ERROR: remote host returned no data for query:", e
+            self.log("ping_check_func(): remote host returned no data for query: %s" e, "ERROR")
         except SSHFailure:
-            print "Received error code 255 from ssh, likely due to the wrong password"
+            self.log("ping_check_func(): Received error code 255 from ssh, likely due to the wrong password", "ERROR")
         except Exception, e:
-            print "ERROR:", e
+            self.log("ping_check_func(): %s" % e, "ERROR")
         else:
             for row in output:
                 row = row.rstrip('\n')
-                if self.debug:
-                    print "DEBUG: " + row
+                self.debuglog("ping_check_func(): row = %s" % row)
                 if str(row) != "1":
                     self.notify_external(critical=True, message="no response from master")
                 else:
@@ -301,8 +298,7 @@ class CMDStandby(CMDWorker):
     # TODO: replace popen with subprocess module calls.
     def exec_query_on_primary(self, query, emptyok=True):
         """ Runs a database query on the primary node and returns the psql output"""
-        if self.debug:
-            print 'DEBUG: executing query %s by %s' % (query, self.ssh_psql)
+        self.debuglog("exec_query_on_primarY: executing query `%s' via: %s" % (query, self.ssh_psql))
         p = os.popen("%s -c %s\"" % (self.ssh_psql, query))
         result = p.readlines()
         exitstatus = p.close()
@@ -321,8 +317,7 @@ class CMDStandby(CMDWorker):
         try:
             paths = self.exec_query_on_primary("""'SELECT * FROM cmd_get_data_dirs()'""")
         except:
-            print "ERROR: Unable to get namespace paths"
-            print "HINT: Did you apply cmd_standby.sql?"
+            self.log("primary_get_tablespace_paths(): Unable to get namespace paths; did you apply the helper scripts in cmd_standby.sql?", "ERROR")
             raise
         return paths
 
@@ -330,8 +325,7 @@ class CMDStandby(CMDWorker):
         try:
             path = self.exec_query_on_primary("""'SELECT * FROM cmd_get_pgdata() LIMIT 1'""", False)
         except RemoteNoData:
-            print "ERROR: Unable to get namespace paths"
-            print "HINT: Did you apply cmd_standby.sql?"
+            self.log("primary_get_datadir_path(): Unable to get namespace paths; did you apply the helper scripts in cmd_standby.sql?", "ERROR")
             raise
         return path[0]
 
@@ -340,21 +334,18 @@ class CMDStandby(CMDWorker):
     def start_backup_func(self):
         retval = os.system("rm -rf %s/*" % (self.archivedir,))
         if retval:
-            print "WARNING: unable to remove old archives, retval:", retval
+            self.log("Unable to rm old archives: return code %d" % retval, "WARNING")
         output = self.exec_query_on_primary(""" 'checkpoint' """, False)
         for row in output:
             row = row.rstrip('\n')
-            if self.debug:
-                print "DEBUG: " + row
+            self.debuglog("start_backup_func(): row = %s" % row)
             if str(row) != "CHECKPOINT":
-                print "ERROR: Unable to execute CHECKPOINT"
-                self.notify_external(critical=True, message="Unable to execute CHECKPOINT")
+                self.notify_external(log=True, critical=True, message="Unable to execute CHECKPOINT")
                 raise Exception("ERROR: Unable to execute CHECKPOINT")
         output = self.exec_query_on_primary(""" 'SELECT cmd_pg_start_backup()' """, False)
         for row in output:
             row = row.rstrip('\n')
-            if self.debug:
-                print "DEBUG: cmd_pg_start_backup:  " + row
+            self.debuglog("start_backup_func(): cmd_pg_start_backup: row = %s" % row)
             if str(row) != "1":
                 raise Exception("ERROR: Unable to start base backup")
 
@@ -369,27 +360,26 @@ class CMDStandby(CMDWorker):
         try:
             output = self.exec_query_on_primary(""" 'SELECT cmd_pg_stop_backup()' """)
         except RemoteNoData, e:
-            print "ERROR: remote host returned no data for query:", e
+            self.log("stop_backup_func(): remote host returned no data for query: %s" % e, "ERROR")
         except SSHFailure:
-            print "Received error code 255 from ssh, likely due to the wrong password"
+            self.log("stop_backup_func(): received error code 255 from ssh, likely due to the wrong password", "ERROR")
         except Exception, e:
-            print "ERROR:", e
+            self.log("stop_backup_func(): %s" % e, "ERROR")
         else:
             for row in output:
                 row = row.rstrip('\n')
-                if self.debug:
-                    print "DEBUG: cmd_pg_stop_backup: " + row
+                self.debuglog("stop_backup_func(): cmd_pg_stop_backup: row = %s" % row)
                 if str(row) == "1":
                     success = True
         if not success:
-            print "ERROR: Unable to stop base backup"
+            self.log("stop_backup_func(): Unable to stop base backup", "ERROR")
         return success
 
     # Simple function to help ensure we have all paths created for postgresql
     def dbinit_func(self):
         check = standby.check_pgpid_func()
         if check == 0:
-            print "ERROR: Can not execute --dbinit with PG running locally"
+            self.log("dbinit_func(): Can not execute --dbinit with PG running locally", "ERROR")
             return False
         # check whether pgdata and tablespace paths exist, create if not.
         try:
@@ -402,15 +392,14 @@ class CMDStandby(CMDWorker):
                 if not os.path.isdir(row):
                     os.makedirs(row, 0700)
         except OSError, e:
-            print "ERROR: ", e
-            print "HINT: You may have permission problems"
-            print "Make sure that %s has the ability to create the directory: " % (self.user, self.pgdata)
+            self.log("dbinit_func(): %s " % e, "ERROR")
+            self.log("You may have permission problems; make sure user %s can create directory %s" % (self.user, self.pgdata))
         except Exception, e:
-            print "ERROR: ", e
+            self.log("dbinit_func(): %s " % e, "ERROR")
         else:
-            print "Standby is ready"
+            self.log("dbinit_func(): Standby is ready")
             return True
-        print "ERROR: Initialization FAILED"
+        self.log("dbinit_func(): failed", "ERROR")
         return False
 
     # Takes a base backup of master. This function is tricky because
@@ -424,41 +413,36 @@ class CMDStandby(CMDWorker):
         self.debuglog("copy_dirs %s" % self.copy_dirs)
 
         for row in paths:
-            if self.debug:
-                print "DEBUG: " + row
             row = row.rstrip('\n')
+            self.debuglog("base_backup_func(): row = %s" % row)
             retval = subprocess.call([trsync_path, "--num_threads", str(self.rsync_threads), "%s%s/" % (self.copy_dirs, row), "%s/" % row])
             if retval and retval != 23 and retval != 24: # 23, 24 incomplete or vanished source file.
-                self.debuglog("Couldn't rsync")
+                self.debuglog("base_backup_func(): Couldn't rsync")
                 raise RsyncFailure
         # finally, copy over pgdata
         master_pgdata = self.primary_get_datadir_path().strip('\n')
-        self.debuglog("primary_get_datadir_path() handled")
         # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
         # XXX: does it makes sense at all, given that we don't copy pg_xlog from master?
         if self.use_streaming_replication:
-            if self.debug:
-                print "DEBUG: cleaning up " + master_pgdata + "/pg_xlog/ directory before rsync"
+            self.debuglog("base_backup_func(): Cleaning up master pg_xlog directory before rsync")
             os.system("rm -rf " + self.pgdata + "/pg_xlog/*")
-            self.debuglog("pg_xlog flushed")
         retval = subprocess.call([trsync_path, "--num_threads", str(self.rsync_threads), "%s%s/ %s/" % (" ".join(self.copy_dirs), master_pgdata, self.pgdata)])
         if retval and retval != 23 and retval != 24:
-            self.debuglog("Couldn't rsync")
+            self.log("base_backup_func(): Couldn't rsync", "ERROR")
             raise RsyncFailure
 
     # Start postgresql
     def start_postgresql_func(self):
         retval = system(self.pgctl_base + " start")
         if retval:
-            print "ERROR: Unable to start PostgreSQL"
-            self.notify_external(warning=True, message="Unable to start PostgreSQL")
+            self.notify_external(log=True, warning=True, message="Unable to start PostgreSQL")
             return False
         # check whether PostgreSQL has already started. Sleep to give it time to write
         # the pid file.
         sleep(2)
         check = standby.check_pgpid_func()
         if check != 0:
-            print "ERROR: PostgreSQL refused to start"
+            self.log("start_postgresql_func(): PostgreSQL refused to start", "ERROR")
             return False
         return True
 
@@ -466,7 +450,6 @@ class CMDStandby(CMDWorker):
     def stop_postgresql_func(self):
         retval = system(self.pgctl_base + " -m fast stop")
         if retval:
-            print "ERROR: Unable to stop PostgreSQL"
             self.notify_external(critical=True, message="Unable to stop PostgreSQL")
             return False
         return True
@@ -478,7 +461,7 @@ class CMDStandby(CMDWorker):
             file.write('%s' % (self.recovery_string))
             file.close()
         except Exception, e:
-            print "ERROR: Unable to write recovery file: %s" % (self.recovery_conf)
+            self.log("write_recovery_func(): Unable to write recovery file %s" % self.recovery_conf)
             self.notify_external(critical=True, message="Unable to write recovery file: %s" % (e,))
             raise
 
@@ -501,9 +484,9 @@ class CMDStandby(CMDWorker):
                     if os.access(f, os.F_OK | os.R_OK):
                         shutil.copy(f, self.pgdata)
                     else:
-                        print "WARNING: %s is inaccessible" % (f,)
+                        self.log("copy_conf(): %s is inaccessible" % f, "WARNING")
             except Exception:
-                print "ERROR: Unable to copy configuration files: %s" % (f,)
+                self.log("Unable to copy configuration file %s" % f, "ERROR")
                 raise
 
     # Standby function, we need to write the recovery configuration
@@ -512,19 +495,19 @@ class CMDStandby(CMDWorker):
         result = False
         check = standby.check_pgpid_func()
         if check == 0:
-            print "ERROR: Can not enter standby mode if PG is already running"
+            self.log("standby_func(): Can not enter standby mode if PG is already running", "ERROR")
             return False
         try:
             self.write_recovery_func()
         except Exception, e:
-            print "ERROR:", e
+            self.log("standby_func(): %s" % e, "ERROR")
         else:
             self.copy_conf()
             result = self.start_postgresql_func()
         if not result:
-            print "ERROR: Unable to enter standby mode"
+            self.log("standby_func(): Unable to enter standby mode", "ERROR")
         else:
-            print "Successfully entered standby mode"
+            self.log("standby_func(): Successfully entered standby mode")
         return result
 
     # Function allows you to specify a script to execute on failover
@@ -536,15 +519,14 @@ class CMDStandby(CMDWorker):
                 self.notify_external(critical=True, message="failover action returned non-zero exit code")
                 return False
             else:
-                print "NOTICE: Statistics are not replicated in warm standy mode."
-                print "HINT: Execute ANALYZE on your databases"
+                self.log("Statistics are not replicated in warm standby mode. Try executing ANALYZE on your databases.")
                 return True
 
     def run_base_backup(self):
         result = False
         check = self.check_pgpid_func()
         if check == 0:
-            print "ERROR: Can not take base backup with PG running locally"
+            self.log("run_base_backup(): Cannot take base backup with PG running locally", "ERROR")
         else:
             try:
                 self.start_backup_func()
@@ -557,23 +539,19 @@ class CMDStandby(CMDWorker):
                 else:
                     self.notify_external(critical=True, message="unable to access xlog path")
             except RsyncFailure:
-                print
-                print "WARNING: Failed to get 0 exit status"
-                print "LOG: Check your rsync errors as this may be harmless"
-                print "LOG: File vanished: .... is ok"
-                print
+                self.log("run_base_backup(): rsync returned non-zero exit status. Check logged errors as this may be harmless.", "WARNING")
             except RemoteNoData, e:
-                print "ERROR: remote host returned no data for query:", e
+                self.log("run_base_backup(): remote host returned no data for query: %s" % e, "ERROR")
             except SSHFailure:
-                print "Received error code 255 from ssh, likely due to the wrong password"
+                self.log("run_base_backup(): received error code 255 from ssh, likely due to the wrong password", "ERROR")
             except Exception, e:
-                print "ERROR:", e
+                self.log("run_base_backup(): %s" % e, "ERROR")
             finally:
                 result = self.stop_backup_func() and result
         if result:
-            print "Base backup finished successfully"
+            self.log("run_base_backup(): Base backup finished successfully")
         else:
-            print "Base backup is unsuccessful and should be restarted"
+            self.log("run_base_backup(): Base backup is unsuccessful and should be restarted", "ERROR")
         return result
 
     def do_failover(self, options):
@@ -589,14 +567,14 @@ class CMDStandby(CMDWorker):
                         file = open(self.trigger_file, "w")
                         file.close()
                     except:
-                        print "ERROR: Unable to write trigger file: %s" % (self.trigger_file,)
+                        self.log("do_failover(): unable to write trigger file %s" % self.trigger_file, "ERROR")
                         raise
                 else:
                     # pgsql is NOT running, and we are trying to failover.  Lets try to rename recovery.conf into recovery.stopped and try to start pgsql.
                     try:
                         os.rename(self.recovery_conf, self.recovery_stopped_file)
                     except:
-                        print "ERROR: Unable to rename %s into %s" % (self.recovery_conf, self.recovery_stopped_file)
+                        self.log("do_failover(): unable to rename %s to %s" % (self.recovery_conf, self.recovery_stopped_file), "ERROR")
                         raise
             else:
                 # XXX: trying to stop the server that does recovery may not work
@@ -606,21 +584,21 @@ class CMDStandby(CMDWorker):
             # XXX: if it's streaming replication and the server is already running - than it's running with an old set of configuration files.
             self.copy_conf(failover=True)
         except Exception, e:
-            print "ERROR:", e
+            self.log("do_failover(): %s" % e, "ERROR")
             success = False
         else:
             # try to start PostgreSQL if it's not running
             if not self.use_streaming_replication or check != 0:
                 success = success and self.start_postgresql_func()
             if not success:
-                print "ERROR: Failover FAILED"
+                self.log("do_failover(): failover FAILED", "ERROR")
             else:
-                print "Failover finished"
+                self.log("do_failover(): failover finished")
             # technically, failover has succeeded at this moment, but we still may fail
             # at the failover action script. Distinguish that case from failure at failover
             success = success and self.failover_action_func()
             if success:
-                self.notify_external(ok=True, message="successfull failover")
+                self.notify_external(ok=True, message="successful failover")
         return success
 
 if __name__ == '__main__':
@@ -652,7 +630,7 @@ if __name__ == '__main__':
         # pg_standy arguments and recovery options.
         standby.set_options(options)
     except Exception, e:
-        print "ERROR:", e
+        self.log(e, "ERROR")
         sys.exit(2)
 
     success = False

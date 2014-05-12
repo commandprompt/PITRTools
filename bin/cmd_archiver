@@ -88,20 +88,20 @@ class CMDArchiver(CMDWorker):
         # bail out if archivedir exists and not empty or inaccessible.
         if (os.access(l_archivedir, F_OK)):
             if (not os.access(l_archivedir, R_OK | W_OK | X_OK)):
-                self.log("l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir, "ERROR")
+                self.log("init_env_func(): l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir, "ERROR")
                 return False
             elif (os.listdir(l_archivedir) != []):
-                self.log("l_archivedir %s must be be empty" % l_archivedir, "ERROR")
+                self.log("init_env_func(): l_archivedir %s must be be empty" % l_archivedir, "ERROR")
                 return False
             else:
-                self.log("l_archivedir %s already exists" % l_archivedir, "WARNING")
+                self.log("init_env_func(): l_archivedir %s already exists" % l_archivedir, "WARNING")
         queues = self.generate_slave_list_func()
         try:
             for host in queues:
                 queue = l_archivedir + "/" + host
                 os.makedirs("%s" % (queue))
         except OSError, e:
-            self.log("Can not make queue directories", "ERROR")
+            self.log("init_env_func(): Can not make queue directories", "ERROR")
             print "EXCEPTION: %s" % (str(e))
             exit(1)
 
@@ -137,8 +137,7 @@ class CMDArchiver(CMDWorker):
                 if match != None:
                     print match
         except OSError, e:
-            print
-            print "EXCEPTION: %s" % (str(e))
+            self.log("get_pgcontroldata_func(): %s" % e, "ERROR")
             exit(1)
 
     def flush_check_func(self):
@@ -227,14 +226,14 @@ class CMDArchiver(CMDWorker):
         #If we are not online, exit immediately
         if self.state != 'online':
             print "We are offline, queuing archives"
-            self.notify_external(warning=True, message="ARCHIVER: We are offline, queuing archives")
+            self.notify_external(warning=True, message="archive_func(): We are offline, queuing archives")
             return False
         try:
             slaves = self.generate_slave_list_func()
             # First we send the queue files (if any). If we can't we exit
             queue = self.send_queue_func()
             if queue:
-                self.notify_external(log=True, warning=True, message="Unable to send queued archived files, queueing")
+                self.notify_external(log=True, warning=True, message="archive_func(): Unable to send queued archived files, queueing")
                 # If the host returned is in the list, we automatically
                 # archive to the queue.
                 if host in queue:
@@ -318,7 +317,7 @@ if __name__ == '__main__':
     try:
         cfg_vals = archiver.load_configuration_file(configfilename)
     except Exception, e:
-        print "ERROR: %s" % (e,)
+        self.log(e, "ERROR")
         exit(2)
 
     archiver.set_ssh_flags()
