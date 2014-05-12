@@ -220,7 +220,7 @@ class CMDArchiver(CMDWorker):
         queue_dir = os.path.join(self.l_archivedir, slave)
         queue_transfer = "%s %s %s" % (self.rsync, self.archivefile, queue_dir)
 
-        self.debuglog("queue_log_func: Queueing log via: %s" % queue_transfer)
+        self.debuglog("queue_log_func(): Queueing log via: %s" % queue_transfer)
         ret = subprocess.call(queue_transfer)
         if ret:
             #Rsync returned non-zero exit status. 
@@ -234,7 +234,6 @@ class CMDArchiver(CMDWorker):
 
         slave is name of slave to queue for
         """
-
         archivepath = os.path.join(self.pgdata, self.archivefile)
         rsync_flags_list = self.rsync_flags.split()
 
@@ -244,14 +243,15 @@ class CMDArchiver(CMDWorker):
                                  '%s@%s:%s' % (self.user, slave, self.r_archivedir)])
         
         self.log("Shipping %s to %s" % (self.archivefile, slave))
-        self.debuglog("ship_log_func: Shipping log via: %s" % log_transfer_cmd)
+        self.debuglog("ship_log_func(): Shipping log via: %s" % log_transfer_cmd)
         ret = subprocess.call(log_transfer_cmd)
         if ret:
             #Rsync returned non-zero exit status
             self.notify_external(log=True, critical=True, message="ship_log_func: rsync error %d" % ret)
             self.queue_log_func(slave)
+            self.debuglog("queue_log_func(%s) handled successfully" % slave)
         self.notify_external(log=True, ok=True, message="0")
-            
+
     def handle_queues(self):
         """
         Try to ship any existing slave queues. If we cannot send to a slave, queue self.archivefile for them.
@@ -268,6 +268,7 @@ class CMDArchiver(CMDWorker):
                              message="Couldn't send existing queues for hosts: %s. Queueing %s for them." % (", ".join(failed_slaves), self.archivefile))            
         for slave in failed_slaves:
             self.queue_log_func(slave)
+            self.debuglog("queue_log_func(%s) handled successfully" % slave)
 
         #Don't try to ship a log if we just queued it
         return set(slaves).difference(set(failed_slaves))
@@ -290,10 +291,12 @@ class CMDArchiver(CMDWorker):
 
         #Send any existing queues, and queue to any that failed.
         slaves = self.handle_queues()
+        self.debuglog("handle_queues() handled successfully")
 
-        #Attempt to ship self.archivefile to slaves
+        #Attempt to ship self.archivefile to slaves that are reachable
         for slave in slaves:
             self.ship_log_func(slave)
+            self.debuglog("ship_log_func(%s) handled successfully" % slave)
 
         self.log("Archiving of %s handled successfully" % self.archivefile)
         
