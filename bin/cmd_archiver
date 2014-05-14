@@ -322,7 +322,7 @@ if __name__ == '__main__':
     try:
         cfg_vals = archiver.load_configuration_file(configfilename)
     except Exception, e:
-        self.log(e, "ERROR")
+        archiver.log(e, "ERROR")
         exit(2)
 
     archiver.set_ssh_flags()
