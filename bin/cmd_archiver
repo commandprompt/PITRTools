@@ -97,7 +97,7 @@ class CMDArchiver(CMDWorker):
         queues = self.generate_slave_list_func()
         try:
             for host in queues:
-                queue = l_archivedir + "/" + host
+                queue = os.path.join(l_archivedir, host)
                 os.makedirs("%s" % (queue))
         except OSError, e:
             self.log("init_env_func(): Can not make queue directories", "ERROR")
@@ -168,10 +168,11 @@ class CMDArchiver(CMDWorker):
         self.debuglog("list_queue_func(): entered")
         # Empty host array
         hosts = []
+
         # Loop through the list of slaves
         slaves = self.generate_slave_list_func()
         for host in slaves:
-            queuedir = self.l_archivedir + "/" + str(host)
+            queuedir = os.path.join(self.l_archivedir, host)
             list_archives = os.listdir(queuedir)
             # If an archive directory is not empty, then we're good.
             if list_archives:
@@ -190,7 +191,12 @@ class CMDArchiver(CMDWorker):
         self.debuglog("send_queue_func(): entered")
 
         for host in self.list_queue_func():
-            queue_dir = self.l_archivedir + "/" + str(host)
+            if self.debug:
+                print "NOTICE: Host = " + host
+            queue_dir = os.path.join(self.l_archivedir, host)
+            if self.debug:
+                print "NOTICE: queue_dir = " + queue_dir
+            # To deal with old versions of rsync
             if self.rsync_version == 2:
                 #Old rsync version, needs a different flag
                 source_or_sent = "--remove-sent-files"
@@ -287,7 +293,6 @@ class CMDArchiver(CMDWorker):
         if self.state != "online":
             self.notify_external(log=True, warning=True, message="cmd_archiver offline, queuing archives")
             return False
-
 
         #Send any existing queues, and queue to any that failed.
         slaves = self.handle_queues()
