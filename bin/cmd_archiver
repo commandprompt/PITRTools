@@ -222,83 +222,24 @@ class CMDArchiver(CMDWorker):
         those slaves which are not sending until they can send.
         """
         self.debuglog("archive_func(): entered")
+        self.log("Archiving %s" % self.archivefile)
 
-        #If we are not online, exit immediately
-        if self.state != 'online':
-            print "We are offline, queuing archives"
-            self.notify_external(warning=True, message="archive_func(): We are offline, queuing archives")
+        if self.state != "online":
+            self.notify_external(log=True, warning=True, message="cmd_archiver offline, queuing archives")
             return False
-        try:
-            slaves = self.generate_slave_list_func()
-            # First we send the queue files (if any). If we can't we exit
-            queue = self.send_queue_func()
-            if queue:
-                self.notify_external(log=True, warning=True, message="archive_func(): Unable to send queued archived files, queueing")
-                # If the host returned is in the list, we automatically
-                # archive to the queue.
-                if host in queue:
-                    queue_dir = self.l_archivedir + "/" + str(host)
-                    queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
-                    self.debuglog("archive_func(): queueing archive via: %s" % queue_transfer)
-                    retval = os.system(queue_transfer)
-                    if retval:
-                        self.notify_external(critical=True, message=str(retval))
-                        raise ArchiveFailure
-                    else:
-                        self.debuglog("archive_func(): sending OK alert")
-                        self.notify_external(ok=True, message=str(retval))
-            # If the host returned is not in the list, we attempt to
-            # archive normally. If we can not, we archive to the queue. If we
-            # can not archive to the queue, we exit critical.
 
-            # You may end up with files out of order on the slave if the
-            # slave comes online after the queue check but before the current
-            # transfer. This is not a problem because pg_standby will only restore
-            # files in order, so on the next queue check the slave will receive
-            # the missing files and pg_standby will correctly restore them.
-            self.debuglog("archive_func(): Transferring archive to slaves")
-            for host in slaves:
-                self.debuglog("archive_func(): Shipping archive to `%s'" % host)
-                if self.flush:
-                    rsync_transfer = """%s %s %s/pg_xlog/* -e "%s %s"  %s@%s:%s""" % (str(self.rsync), str(self.rsync_flags), str(self.pgdata), str(self.ssh), str(self.ssh_flags), str(self.user), str(host), str(self.r_archivedir))
-                    self.flush_check_func()
-                    check = self.check_pgpid_func()
-                    if check == 0:
-                        print "ERROR: Can not enter flush mode if PG is already running"
-                        raise ArchiveFailure
-                else:
-                    rsync_transfer = """%s %s -q -e "%s %s" %s %s@%s:%s""" % (str(self.rsync), str(self.rsync_flags), str(self.ssh), str(self.ssh_flags), str(self.archivefile), str(self.user), str(host), str(self.r_archivedir))
-                self.debuglog("archive_func(): Shipping archive via: %s" % rsync_transfer)
-                retval = os.system("%s" % (rsync_transfer))
-                if retval:
-                    if self.flush:
-                        # don't try to enqueue the segment archived if this is a flush
-                        self.log("archive_func(): unable to flush pg_xlog to host %s" % host, "ERROR")
-                        raise ArchiveFailure
+        #Send any existing queues, and queue to any that failed.
+        slaves = self.handle_queues()
+        self.debuglog("handle_queues() called")
 
-                    queue_dir = self.l_archivedir + "/" + str(host)
-                    queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
-                    self.debuglog("archive_func(): Couldn't transfer, queueing via: %s" % queue_transfer)
-                    retval = os.system(queue_transfer)
-                    if retval:
-                        self.log("archive_func(): Unable to ship or queue archive", "ERROR")
-                        self.notify_external(critical=True, message=str(retval))
-                        raise ArchiveFailure
-                    else:
-                        self.notify_external(warning=True, message=str(retval))
-                else:
-                    self.debuglog("archive_func(): sending OK alert")
-                    self.notify_external(ok=True, message=str(retval))
-        except ArchiveFailure:
-            # archiver process was unable to archive the wal segment
-            return False
-        except Exception, e:
-            # generic exception
-            print "ERROR: %s" % (e,)
-            return False
-        else:
-            # WAL segment successfully archived or queued
-            return True
+        #Attempt to ship self.archivefile to slaves that are reachable
+        if slaves:
+            self.log("Shipping archive to %s" % ", ".join(slaves))
+        for slave in slaves:
+            self.ship_log_func(slave)
+            self.debuglog("ship_log_func(%s) called" % slave)
+
+        self.log("Archiving of %s handled successfully" % self.archivefile)
 
 if __name__ == '__main__':
 
@@ -328,11 +269,17 @@ if __name__ == '__main__':
         print "We are initializing queues, one moment.\n"
         success = archiver.init_env_func()
     else:
+        archiver.log("Archiver running")
         #Get binary paths and check config values
         archiver.get_bin_paths_func(options)
         success = archiver.check_config_func()
-        if success:
-            success = archiver.archive_func()
+        if success:            
+            try:
+                success = archiver.archive_func()
+            except:
+                success = 0
+                print archiver.pull_exception()
+    archiver.log("Archiver exiting %d" % 0 if success else 1)
     if success:
         sys.exit(0)
     else:
