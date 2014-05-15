@@ -101,7 +101,7 @@ class CMDArchiver(CMDWorker):
         queues = self.generate_slave_list_func()
         try:
             for host in queues:
-                queue = l_archivedir + "/" + host
+                queue = os.path.join(l_archivedir, host)
                 os.makedirs("%s" % (queue))
         except OSError, e:
             print "ERROR: Can not make queue directories"
@@ -178,7 +178,7 @@ class CMDArchiver(CMDWorker):
         hosts = []
        # Loop through the list of slaves
         for host in self.generate_slave_list_func():
-            queuedir = self.l_archivedir + "/" + str(host)
+            queuedir = os.path.join(self.l_archivedir, host)
             list_archives = os.listdir(queuedir)
             # If an archive directory is not empty, then we're good.
             if list_archives:
@@ -201,7 +201,7 @@ class CMDArchiver(CMDWorker):
         for host in self.list_queue_func():
             if self.debug:
                 print "NOTICE: Host = " + host
-            queue_dir = self.l_archivedir + "/" + str(host)
+            queue_dir = os.path.join(self.l_archivedir, host)
             if self.debug:
                 print "NOTICE: queue_dir = " + queue_dir
             # To deal with old versions of rsync
@@ -258,7 +258,7 @@ class CMDArchiver(CMDWorker):
                 if host in queue:
                     if self.debug:
                         print "NOTICE: Saving archives to queue"
-                    queue_dir = self.l_archivedir + "/" + str(host)
+                    queue_dir = os.path.join(self.l_archivedir, host)
                     queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
                     retval = os.system(queue_transfer)
                     if retval:
@@ -301,7 +301,7 @@ class CMDArchiver(CMDWorker):
                         print "FATAL: unable to flush pg_xlog to host %s" % (str(host),)
                         raise ArchiveFailure
                     print "NOTICE: no luck shipping archive"
-                    queue_dir = self.l_archivedir + "/" + str(host)
+                    queue_dir = os.path.join(self.l_archivedir, host)
                     queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
                     retval = os.system(queue_transfer)
                     if retval:
