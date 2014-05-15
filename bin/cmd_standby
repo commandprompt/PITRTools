@@ -418,10 +418,7 @@ class CMDStandby(CMDWorker):
     def base_backup_func(self):
         # first, copy tablespaces
         paths = self.primary_get_tablespace_paths()
-        self.debuglog("primary_get_tablespace_paths() handled")
         trsync_path = os.path.join(self.pitr_bin_path, "threaded_rsync.py")
-        self.debuglog("trsync_path %s" % trsync_path)
-        self.debuglog("copy_dirs %s" % self.copy_dirs)
 
         for row in paths:
             if self.debug:
@@ -429,21 +426,17 @@ class CMDStandby(CMDWorker):
             row = row.rstrip('\n')
             retval = subprocess.call([trsync_path, "--num_threads", str(self.rsync_threads), "%s%s/" % (self.copy_dirs, row), "%s/" % row])
             if retval and retval != 23 and retval != 24: # 23, 24 incomplete or vanished source file.
-                self.debuglog("Couldn't rsync")
                 raise RsyncFailure
         # finally, copy over pgdata
         master_pgdata = self.primary_get_datadir_path().strip('\n')
-        self.debuglog("primary_get_datadir_path() handled")
         # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
         # XXX: does it makes sense at all, given that we don't copy pg_xlog from master?
         if self.use_streaming_replication:
             if self.debug:
                 print "DEBUG: cleaning up " + master_pgdata + "/pg_xlog/ directory before rsync"
             os.system("rm -rf " + self.pgdata + "/pg_xlog/*")
-            self.debuglog("pg_xlog flushed")
         retval = subprocess.call([trsync_path, "--num_threads", str(self.rsync_threads), "%s%s/ %s/" % (" ".join(self.copy_dirs), master_pgdata, self.pgdata)])
         if retval and retval != 23 and retval != 24:
-            self.debuglog("Couldn't rsync")
             raise RsyncFailure
 
     # Start postgresql
