@@ -345,7 +345,7 @@ if __name__ == '__main__':
         success = archiver.check_config_func()
         if success:            
             try:
-                archiver.archive_func()
+                success = archiver.archive_func()
             except:
                 success = 0
                 print archiver.pull_exception()
