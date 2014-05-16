@@ -276,7 +276,7 @@ class CMDStandby(CMDWorker):
         try:
             output = self.exec_query_on_primary("""'SELECT 1'""", False)
         except RemoteNoData, e:
-            self.log("ping_check_func(): remote host returned no data for query: %s" e, "ERROR")
+            self.log("ping_check_func(): remote host returned no data for query: %s" % e, "ERROR")
         except SSHFailure:
             self.log("ping_check_func(): Received error code 255 from ssh, likely due to the wrong password", "ERROR")
         except Exception, e:
