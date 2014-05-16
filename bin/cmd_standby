@@ -228,7 +228,7 @@ class CMDStandby(CMDWorker):
                 config_file_opts += "-c hba_file=%s " % (pg_hba_conf,)
             if config_file_opts:
                 self.pgctl_base += ["-o",config_file_opts]
-        if self.logfile
+        if self.logfile:
             self.pgctl_base += ["-l",self.logfile]
 
     def set_recovery_options(self, options):
