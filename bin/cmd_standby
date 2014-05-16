@@ -208,8 +208,7 @@ class CMDStandby(CMDWorker):
         self.copy_dirs.extend(["--exclude=pg_log/", "--exclude=pg_xlog/", "--exclude=postgresql.conf", "--exclude=pg_hba.conf", "--exclude=postmaster.pid", "-e",
                                self.ssh, "%s@%s:" % (self.user, self.master_public_ip)])
         self.ssh_psql = ssh_connect + psql_connect
-
-        self.pgctl_base = "%s -D %s " % (self.pg_ctl, self.pgdata)
+        self.pgctl_base = [self.pg_ctl, "-D", self.pgdata]
         if self.no_copy_conf:
             # we don't copy configuration files to the data directory, instead,
             # set command-line options to get them from their pristine locations
@@ -228,9 +227,9 @@ class CMDStandby(CMDWorker):
             if pg_hba_conf and os.access(pg_hba_conf, os.F_OK | os.R_OK):
                 config_file_opts += "-c hba_file=%s " % (pg_hba_conf,)
             if config_file_opts:
-                self.pgctl_base += "-o \"%s\"" % (config_file_opts,)
-        if self.logfile:
-            self.pgctl_base += "-l \"%s\" " % (self.logfile,)
+                self.pgctl_base += ["-o",config_file_opts]
+        if self.logfile
+            self.pgctl_base += ["-l",self.logfile]
 
     def set_recovery_options(self, options):
         # set more sane value for trigger and recovery files now that we know
@@ -448,7 +447,9 @@ class CMDStandby(CMDWorker):
 
     # Start postgresql
     def start_postgresql_func(self):
-        retval = system(self.pgctl_base + " start")
+        pgctl = self.pgctl_base
+        pgctl.insert(1, "start")
+        retval = subprocess.call(pgctl)
         if retval:
             print "ERROR: Unable to start PostgreSQL"
             self.notify_external(warning=True, message="Unable to start PostgreSQL")
