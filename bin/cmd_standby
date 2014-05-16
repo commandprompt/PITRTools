@@ -465,7 +465,9 @@ class CMDStandby(CMDWorker):
 
     # Stop postgresql
     def stop_postgresql_func(self):
-        retval = system(self.pgctl_base + " -m fast stop")
+        pgctl = self.pgctl_base + ["-m", "fast"]
+        pgctl.insert(1, "stop")
+        retval = subprocess.call(pgctl)
         if retval:
             print "ERROR: Unable to stop PostgreSQL"
             self.notify_external(critical=True, message="Unable to stop PostgreSQL")
