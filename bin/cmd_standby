@@ -667,7 +667,7 @@ if __name__ == '__main__':
         success = standby.ping_check_func()
     # If we want to start or stop postgresql on the slave
     elif pgctl_action == 'start':
-        self.copy_conf()
+        standby.copy_conf()
         success = standby.start_postgresql_func()
     elif pgctl_action == 'stop':
         success = standby.stop_postgresql_func()
