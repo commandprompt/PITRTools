@@ -128,27 +128,29 @@ class CMDStandby(CMDWorker):
             else:
                 raise Exception("Couldn't find remote psql")
 
-    # Let's make sure executables can be reached
+    def get_bin_paths_func(self, options):
+        exes = ["pg_ctl"]
+        if not self.use_streaming_replication:
+            exes.append("pg_standby")
+        else:
+            if options.recovertotime:
+                raise Exception('CONFIG: Unable to use recovery_target_time with streaming replication')
+            exes.append("pg_archivecleanup")
+
+        super(CMDStandby, self).get_bin_paths_func(options, CMDWorker.COMMON_BIN_NAMES + exes)
+
+    # Let's make sure archive directory and config files can be reached
     def check_config_func(self, options):
         if int(self.pgversion[0]) < 9:
             raise Exception('CONFIG: PITRTools only supports PostgreSQL versions 9.0+')
-        pathvars = [self.rsync, self.pg_ctl, self.pg_conf, self.pg_hba_conf, self.archivedir]
-        if not self.use_streaming_replication:
-            pathvars.append(self.pg_standby)
-        else:
-            pathvars.append(self.pg_archivecleanup)
-            if options.recovertotime:
-                raise Exception('CONFIG: Unable to use recovery_target_time with streaming replication')
-        for element in pathvars:
-            try:
-                if element != self.archivedir:
-                    os.stat("%s" % (str(element)))
-                else:
-                    # make a new directory if archivedir doesn't exist.
-                    if not os.access(element, os.R_OK | os.W_OK | os.X_OK):
-                        os.makedirs(element, 0700)
-            except OSError, e:
-                raise Exception("CONFIG: can't stat %s %s" % (str(element), str(e)))
+
+        for element in (self.pg_conf, self.pg_hba_conf):
+            os.stat(element)  # raises OSError on fail
+
+        # make a new directory if archivedir doesn't exist.
+        if not os.access(self.archivedir, os.R_OK | os.W_OK | os.X_OK):
+            os.makedirs(self.archivedir, 0700)
+
         if options.failover:
             # check that the configuration files are all set.
             if not self.pg_conf_failover or not self.pg_hba_conf_failover:
@@ -637,10 +639,10 @@ if __name__ == '__main__':
         cfg_vals = standby.load_configuration_file(configfilename)
         # Locate executables
         standby.get_bin_paths_func(options)
-        # Locate executables on master
-        standby.get_remote_psql()
         # Before we do anything, let's check the configuration
         standby.check_config_func(options)
+        # Locate executables on master
+        standby.get_remote_psql()
         # Configure ssh command-line string, rsync options,
         # pg_standy arguments and recovery options.
         standby.set_options(options)
@@ -671,6 +673,9 @@ if __name__ == '__main__':
         success = standby.stop_postgresql_func()
     elif pgctl_action == 'stop_basebackup':
         success = standby.stop_backup_func()
+    else:
+        print "Config OK"
+        success = True
 
     if success:
         sys.exit(0)

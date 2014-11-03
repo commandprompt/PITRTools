@@ -6,7 +6,7 @@ import os
 from optparse import *
 from ConfigParser import *
 
-class CMDWorker:
+class CMDWorker(object):
     """
     Base class for CMDArchiver and CMDStandby,
     containing common routines to read configuration options,
@@ -62,9 +62,10 @@ class CMDWorker:
             set_defaults_cb(result)
         self.__dict__.update(result)
 
+    COMMON_BIN_NAMES = ["rsync", "ssh"]
+
     #Get and set the required absolute paths for executables
-    def get_bin_paths_func(self, options):
-        exes = ["rsync", "pg_ctl", "psql", "ssh"]
+    def get_bin_paths_func(self, options, exes=COMMON_BIN_NAMES):
         found = []
         exe_paths = []
         final_paths = {}
@@ -75,15 +76,6 @@ class CMDWorker:
                 for directory in dirs:
                     abspath = os.path.join(directory, f)
                     yield f,abspath
-
-        #Populate list of executables to find depending on config values
-        if not 'use_streaming_replication' in vars(self):
-            exes.append("pg_standby")
-        else:
-            exes.append("pg_archivecleanup")
-            if options.recovertotime:
-##              raise ConfigError(...)
-                raise Exception("CONFIG: Unable to use recovery_target_time with streaming replication")
 
         path = []
         if "PATH" in os.environ:
