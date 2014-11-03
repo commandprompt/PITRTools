@@ -419,26 +419,36 @@ class CMDStandby(CMDWorker):
     def base_backup_func(self):
         # first, copy tablespaces
         paths = self.primary_get_tablespace_paths()
-        trsync_path = os.path.join(self.pitr_bin_path, "threaded_rsync.py")
-
         for row in paths:
             if self.debug:
                 print "DEBUG: " + row
             row = row.rstrip('\n')
-            retval = subprocess.call([trsync_path, "--num_threads", str(self.rsync_threads), "%s%s/" % (self.copy_dirs, row), "%s/" % row])
+            retval = self.rsync_dir(row)
             if retval and retval != 23 and retval != 24: # 23, 24 incomplete or vanished source file.
                 raise RsyncFailure
         # finally, copy over pgdata
-        master_pgdata = self.primary_get_datadir_path().strip('\n')
         # Before, doing the rsync, make sure we cleanup pg_xlog for streaming replication
         # XXX: does it makes sense at all, given that we don't copy pg_xlog from master?
         if self.use_streaming_replication:
             if self.debug:
-                print "DEBUG: cleaning up " + master_pgdata + "/pg_xlog/ directory before rsync"
+                print "DEBUG: cleaning up " + self.pgdata + "/pg_xlog/ directory before rsync"
             os.system("rm -rf " + self.pgdata + "/pg_xlog/*")
-        retval = subprocess.call([trsync_path, "--num_threads", str(self.rsync_threads), "%s%s/ %s/" % (" ".join(self.copy_dirs), master_pgdata, self.pgdata)])
+        master_pgdata = self.primary_get_datadir_path().strip('\n')
+        retval = self.rsync_dir(master_pgdata, self.pgdata)
         if retval and retval != 23 and retval != 24:
             raise RsyncFailure
+
+    def rsync_dir(self, dirfrom, dirto):
+        cmd_args = list(self.copy_dirs)  # make a copy
+        # last arg of copy_dirs is "user@master:", concat the remote dir
+        cmd_args[-1] += dirfrom + "/"
+        cmd_args += [dirto + "/"]
+        if self.rsync_threads > 1:
+            trsync_path = os.path.join(self.pitr_bin_path, "threaded_rsync.py")
+            cmd_args = [trsync_path, "--num_threads", str(self.rsync_threads), " ".join(cmd_args)]
+        if self.debug:
+            print "running rsync as: %s" % cmd_args
+        return subprocess.call(cmd_args)
 
     # Start postgresql
     def start_postgresql_func(self):
