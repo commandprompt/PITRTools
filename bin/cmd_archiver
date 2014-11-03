@@ -357,7 +357,11 @@ if __name__ == '__main__':
         archiver.get_bin_paths_func(options)
         success = archiver.check_config_func()
         if success:
-            success = archiver.archive_func()
+            if archiver.archivefile:
+                success = archiver.archive_func()
+            else:
+                print "Config OK.  Use -F FILE to actually archive one."
+                success = False  # in case this was put into production
     if success:
         sys.exit(0)
     else:
