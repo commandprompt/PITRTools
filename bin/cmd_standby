@@ -299,7 +299,7 @@ class CMDStandby(CMDWorker):
     # TODO: replace popen with subprocess module calls.
     def exec_query_on_primary(self, query, emptyok=True):
         """ Runs a database query on the primary node and returns the psql output"""
-        self.debuglog("exec_query_on_primarY: executing query `%s' via: %s" % (query, self.ssh_psql))
+        self.debuglog("exec_query_on_primary: executing query `%s' via: %s" % (query, self.ssh_psql))
         p = os.popen("%s -c %s\"" % (self.ssh_psql, query))
         result = p.readlines()
         exitstatus = p.close()
