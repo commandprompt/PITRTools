@@ -210,7 +210,8 @@ class CMDArchiver(CMDWorker):
                 # If we failed to send data to this host - append it to the list
                 # of hosts to retry the sending attempt on
                 rtn.append(host)
-        self.debuglog("send_queue_func(): unreachable hosts: %s" % ", ".join(rtn))
+        if any(rtn):
+            self.debuglog("send_queue_func(): unreachable hosts: %s" % ", ".join(rtn))
         return rtn
 
     def queue_log_func(self, slave):
