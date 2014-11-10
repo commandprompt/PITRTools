@@ -74,9 +74,7 @@ class CMDArchiver(CMDWorker):
         we have to break up the string and turn it into a list
         """
         slaves = str(self.slaves).replace("'", "").split(",")
-        if self.debug:
-            print "NOTICE: generate_slave_list_func()"
-            print "NOTICE: Your slaves are: " + str(slaves)
+        self.debuglog("generate_slave_list_func(): slaves = %s" % slaves)
         return slaves
 
     def init_env_func(self):
@@ -84,26 +82,25 @@ class CMDArchiver(CMDWorker):
         Initialize the local queues so we can check each directory for left
         over files
         """
-        if self.debug:
-            print "NOTICE: init_env_func()"
+        self.debuglog("init_env_func(): entered")
         l_archivedir = self.l_archivedir
         # bail out if archivedir exists and not empty or inaccessible.
         if (os.access(l_archivedir, F_OK)):
             if (not os.access(l_archivedir, R_OK | W_OK | X_OK)):
-                print "ERROR: l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir
+                self.log("init_env_func(): l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir, "ERROR")
                 return False
             elif (os.listdir(l_archivedir) != []):
-                print "ERROR: l_archivedir %s must be empty" % l_archivedir
+                self.log("init_env_func(): l_archivedir %s must be be empty" % l_archivedir, "ERROR")
                 return False
             else:
-                print "WARNING: l_archivedir %s already exists" % l_archivedir
+                self.log("init_env_func(): l_archivedir %s already exists" % l_archivedir, "WARNING")
         queues = self.generate_slave_list_func()
         try:
             for host in queues:
                 queue = os.path.join(l_archivedir, host)
                 os.makedirs("%s" % (queue))
         except OSError, e:
-            print "ERROR: Can not make queue directories"
+            self.log("init_env_func(): Can not make queue directories", "ERROR")
             print "EXCEPTION: %s" % (str(e))
             exit(1)
 
@@ -111,8 +108,7 @@ class CMDArchiver(CMDWorker):
         """
         Let's make sure that our directories and executables exist
         """
-        if self.debug:
-            print "NOTICE: check_config_func()"
+        self.debuglog("check_config_func(): entered")
         pathvars = [self.rsync, self.pgdata, self.l_archivedir]
         for element in pathvars:
             try:
@@ -140,16 +136,14 @@ class CMDArchiver(CMDWorker):
                 if match != None:
                     print match
         except OSError, e:
-            print
-            print "EXCEPTION: %s" % (str(e))
+            self.log("get_pgcontroldata_func(): %s" % e, "ERROR")
             exit(1)
 
     def flush_check_func(self):
         """
         Simple function to make sure we require input before flushing a system
         """
-        if self.debug:
-            print "NOTICE: flush_check_func()"
+        self.debuglog("flush_check_func(): entered")
         print "\n\n"
         print "Warning! Flushing all logs will cause your slave to exit"
         print "Standby and start up. Please verify that this is exactly what you desire.\n\n"""
@@ -171,21 +165,19 @@ class CMDArchiver(CMDWorker):
         We only want to process archives for queues that have files, so we check
         and only return a queue/slave that has files to be shipped.
         """
-        if self.debug:
-            print "NOTICE: list_queue_func()"
-          # Empty host array
+        self.debuglog("list_queue_func(): entered")
+        # Empty host array
         hosts = []
-       # Loop through the list of slaves
-        for host in self.generate_slave_list_func():
+        # Loop through the list of slaves
+        slaves = self.generate_slave_list_func()
+        for host in slaves:
             queuedir = os.path.join(self.l_archivedir, host)
             list_archives = os.listdir(queuedir)
             # If an archive directory is not empty, then we're good.
             if list_archives:
-             # add to list of hosts
+                # add to list of hosts
                 hosts.append(host)
-                if self.debug:
-                    for host in self.generate_slave_list_func():
-                        print "NOTICE: SLAVE: " + host + " " + str(list_archives)
+                self.debuglog("list_queue_func(): host `%s' queue not empty" % host)
         return hosts
 
     def send_queue_func(self):
@@ -195,30 +187,30 @@ class CMDArchiver(CMDWorker):
         return the slave that failed.
         """
         rtn = []
-        if self.debug:
-            print "NOTICE: send_queue_func()"
+        self.debuglog("send_queue_func(): entered")
+
         for host in self.list_queue_func():
-            if self.debug:
-                print "NOTICE: Host = " + host
+            self.debuglog("NOTICE: Host = " + host)
             queue_dir = os.path.join(self.l_archivedir, host)
-            if self.debug:
-                print "NOTICE: queue_dir = " + queue_dir
+            self.debuglog("NOTICE: queue_dir = " + queue_dir)
             # To deal with old versions of rsync
             if self.rsync_version == 2:
-                if self.debug:
-                    print "NOTICE: rsync_version = " + str(self.rsync_version)
+                #Old rsync version, needs a different flag
                 source_or_sent = "--remove-sent-files"
             else:
                 source_or_sent = "--remove-source-files"
+
             queue_transfer = """%s %s -aq %s -e \"%s %s\" %s/ %s@%s:%s/""" % (str(self.rsync), str(self.rsync_flags), str(source_or_sent), str(self.ssh), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
+
+            self.debuglog("send_queue_func(): host = %s, queue_dir = %s, rsync_version = %d" % (host, queue_dir, self.rsync_version))
+            self.debuglog("send_queue_func(): transferring queue via: %s" % queue_transfer)
+
             retval = os.system(queue_transfer)
-            if self.debug:
-                print "NOTICE: Transfering queue = " + queue_transfer
-                print "NOTICE: Transfer retval = " + str(retval)
             if retval:
                 # If we failed to send data to this host - append it to the list
                 # of hosts to retry the sending attempt on
                 rtn.append(host)
+        self.debuglog("send_queue_func(): unreachable hosts: %s" % ", ".join(rtn))
         return rtn
 
     def queue_log_func(self, slave):
@@ -294,17 +286,20 @@ class CMDArchiver(CMDWorker):
         can not send files. The archiver then automatically queues all logs for
         those slaves which are not sending until they can send.
         """
+        self.debuglog("archive_func(): entered")
+        self.log("Archiving %s" % self.archivefile)
 
-        self.debuglog("archive_func: self.archivefile = %s" % self.archivefile)
         if self.state != "online":
             self.notify_external(log=True, warning=True, message="cmd_archiver offline, queuing archives")
             return False
 
         #Send any existing queues, and queue to any that failed.
         slaves = self.handle_queues()
-        self.debuglog("handle_queues() handled successfully")
+        self.debuglog("handle_queues() called")
 
         #Attempt to ship self.archivefile to slaves that are reachable
+        if slaves:
+            self.log("Shipping archive to %s" % ", ".join(slaves))
         for slave in slaves:
             self.ship_log_func(slave)
             self.debuglog("ship_log_func(%s) handled successfully" % slave)
@@ -330,7 +325,7 @@ if __name__ == '__main__':
     try:
         cfg_vals = archiver.load_configuration_file(configfilename)
     except Exception, e:
-        print "ERROR: %s" % (e,)
+        archiver.log(e, "ERROR")
         exit(2)
 
     archiver.set_ssh_flags()
@@ -341,6 +336,7 @@ if __name__ == '__main__':
         print "We are initializing queues, one moment.\n"
         success = archiver.init_env_func()
     else:
+        archiver.log("Archiver running")
         #Get binary paths and check config values
         archiver.get_bin_paths_func(options)
         success = archiver.check_config_func()
@@ -354,6 +350,8 @@ if __name__ == '__main__':
             else:
                 print "Config OK.  Use -F FILE to actually archive one."
                 success = False  # in case this was put into production
+
+    archiver.log("Archiver exiting %d" % (0 if success else 1))
     if success:
         sys.exit(0)
     else:
