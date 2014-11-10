@@ -3,6 +3,10 @@
 # Base class for CMDStandby and CMDArchiver.
 
 import os
+import sys
+import time
+import traceback
+import subprocess
 from optparse import *
 from ConfigParser import *
 
@@ -106,12 +110,46 @@ class CMDWorker(object):
             final_paths[exe] = exe_paths[i]
         self.__dict__.update(final_paths)
 
-    def notify_external(self, ok=False, warning=False, critical=False, message=None):
+    def pull_exception(self):
+        exc = sys.exc_info()
+        return traceback.format_exc(exc[2])
+
+    def log(self, msg, level="NOTICE"):
+        """
+        Log a message to stdout in the format:
+        [month.day.year hour:minute:second] level: message
+
+        Arguments:
+        | argument | type   | default | description
+        * msg      - string -         - Message to log
+        * level    - string - NOTICE  - Log level to prepend to message
+        """
+
+        timestamp = time.strftime("%b.%d.%Y %R:%S")
+        print "[%s] %s: %s" % (timestamp, level, msg)
+
+    def debuglog(self, msg):
+        if self.debug:
+            self.log(msg, "DEBUG")
+
+    def notify_external(self, log=False, ok=False, warning=False, critical=False, message=None):
         """
         Notify some external program (i.e. monitoring plugin)
-        about an event occured. The program itself can be set
-        via notify_* configuration options.
+        about an event occuring. The program itself can be set
+        via notify_* configuration options. 
+
+        Arguments:
+        | argument                     | type    | default | description
+        * log                          - boolean - False   - Log the message with self.log if true.
+        * ok, false, warning, critical - boolean - False   - If one is not set True, immediately return.
+        * message                      - string  - None    - Will be appended to the end of the command. 
         """
+
+        #Return if we don't have an alert status or if none of the notify commands are set in the config
+        if not True in (ok, warning, critical):
+            return
+        if not filter(len, [self.notify_ok, self.notify_warning, self.notify_critical]):
+            return
         if ok:
             exec_str = "%s" % (self.notify_ok,)
         elif warning:
@@ -119,9 +157,12 @@ class CMDWorker(object):
         elif critical:
             exec_str = "%s" % (self.notify_critical,)
         if message:
-            exec_str += " %s" % (message,)
-        if ok or warning or critical:
-            os.system(exec_str)
+            exec_str ="%s %s" % (exec_str, message,)
+            if log:
+                self.log(message)
+
+        self.debuglog("notify_external exec_str: %s" % exec_str)
+        subprocess.call(exec_str)
 
     def check_pgpid_func(self):
         """
@@ -141,9 +182,9 @@ class CMDWorker(object):
 
     # set up our ssh transfer timeout and debug options
     def set_ssh_flags(self):
-        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no " % (self.ssh_timeout,)
+        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (self.ssh_timeout,)
         if self.ssh_debug:
-            self.ssh_flags += '-vvv '
+            self.ssh_flags += " -vvv"
 
 
 if __name__ == '__main__':

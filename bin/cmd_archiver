@@ -28,11 +28,10 @@ PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 import os
 import re
 import sys
-
+import subprocess
 from os import *
 from sys import *
 from cmd_worker import CMDWorker
-
 
 argslist = (('-F', '--file', dict(dest="archivefilename",
                 action="store", help="Archive file", metavar="FILE")),
@@ -222,6 +221,69 @@ class CMDArchiver(CMDWorker):
                 rtn.append(host)
         return rtn
 
+    def queue_log_func(self, slave):
+        """
+        Queue the current log file (self.archivefile) to a slave.
+        
+        slave is name of slave to queue for
+        """
+
+        queue_dir = os.path.join(self.l_archivedir, slave)
+        queue_transfer = "%s %s %s" % (self.rsync, self.archivefile, queue_dir)
+
+        self.debuglog("queue_log_func(): Queueing log via: %s" % queue_transfer)
+        ret = subprocess.call(queue_transfer)
+        if ret:
+            #Rsync returned non-zero exit status. 
+            self.notify_external(log=True, critical=True, message="queue_log_func: rsync error %d" % ret)
+            raise ArchiveFailure
+        self.notify_external(ok=True, message="0")
+        
+    def ship_log_func(self, slave):
+        """
+        Ship the current log file (self.archivefile) to a slave. Queue the log for them if we fail.
+
+        slave is name of slave to queue for
+        """
+        archivepath = os.path.join(self.pgdata, self.archivefile)
+        rsync_flags_list = self.rsync_flags.split()
+
+        log_transfer_cmd = [self.rsync]
+        log_transfer_cmd.extend(rsync_flags_list)
+        log_transfer_cmd.extend(['-q', '-e', '%s %s' % (self.ssh, self.ssh_flags), archivepath,
+                                 '%s@%s:%s' % (self.user, slave, self.r_archivedir)])
+        
+        self.log("Shipping %s to %s" % (self.archivefile, slave))
+        self.debuglog("ship_log_func(): Shipping log via: %s" % log_transfer_cmd)
+        ret = subprocess.call(log_transfer_cmd)
+        if ret:
+            #Rsync returned non-zero exit status
+            self.notify_external(log=True, critical=True, message="ship_log_func: rsync error %d" % ret)
+            self.queue_log_func(slave)
+            self.debuglog("queue_log_func(%s) handled successfully" % slave)
+        self.notify_external(log=True, ok=True, message="0")
+
+    def handle_queues(self):
+        """
+        Try to ship any existing slave queues. If we cannot send to a slave, queue self.archivefile for them.
+        
+        Returns a list of slaves that were not queued to.
+        """
+
+        slaves = self.generate_slave_list_func()
+        failed_slaves = self.send_queue_func()
+        if not failed_slaves:
+            return []
+        self.notify_external(log=True,
+                             warning=True, 
+                             message="Couldn't send existing queues for hosts: %s. Queueing %s for them." % (", ".join(failed_slaves), self.archivefile))            
+        for slave in failed_slaves:
+            self.queue_log_func(slave)
+            self.debuglog("queue_log_func(%s) handled successfully" % slave)
+
+        #Don't try to ship a log if we just queued it
+        return set(slaves).difference(set(failed_slaves))
+
     def archive_func(self):
         """
         The main archive function.
@@ -232,99 +294,23 @@ class CMDArchiver(CMDWorker):
         can not send files. The archiver then automatically queues all logs for
         those slaves which are not sending until they can send.
         """
-        if self.debug:
-            print "NOTICE: Performing standard archive"
 
-        #If we are not online, exit immediately
-        if self.state != 'online':
-            print "We are offline, queuing archives"
-            self.notify_external(warning=True, message="ARCHIVER: We are offline, queuing archives")
+        self.debuglog("archive_func: self.archivefile = %s" % self.archivefile)
+        if self.state != "online":
+            self.notify_external(log=True, warning=True, message="cmd_archiver offline, queuing archives")
             return False
-        try:
-            slaves = self.generate_slave_list_func()
-            # First we send the queue files (if any). If we can't we exit
-            queue = self.send_queue_func()
-            if queue:
-                if self.debug:
-                    print "NOTICE: queue = " + str(queue)
-                    print "ERROR: Unable to send queued archived files, queueing"
-                    print "NOTICE: slaves = generate_slave_list_func() " + str(slaves)
-                    self.notify_external(warning=True, message="Unable to send queued archived files, queueing")
-                for host in slaves:
-                    if self.debug:
-                        print "NOTICE: " + host + " in " + str(slaves)
-                # If the host returned is in the list, we automatically
-                # archive to the queue.
-                if host in queue:
-                    if self.debug:
-                        print "NOTICE: Saving archives to queue"
-                    queue_dir = os.path.join(self.l_archivedir, host)
-                    queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
-                    retval = os.system(queue_transfer)
-                    if retval:
-                        self.notify_external(critical=True, message=str(retval))
-                        raise ArchiveFailure
-                    else:
-                        if self.debug:
-                            print "NOTICE: Sending OK alert"
-                        self.notify_external(ok=True, message=str(retval))
-            # If the host returned is not in the list, we attempt to
-            # archive normally. If we can not, we archive to the queue. If we
-            # can not archive to the queue, we exit critical.
 
-            # You may end up with files out of order on the slave if the
-            # slave comes online after the queue check but before the current
-            # transfer. This is not a problem because pg_standby will only restore
-            # files in order, so on the next queue check the slave will receive
-            # the missing files and pg_standby will correctly restore them.
-            if self.debug:
-                print "NOTICE: Entering single file archive transfer"
-            for host in slaves:
-                if self.debug:
-                    print "NOTICE: Archiving for: " + str(host)
-                if self.flush:
-                    rsync_transfer = """%s %s %s/pg_xlog/* -e "%s %s"  %s@%s:%s""" % (str(self.rsync), str(self.rsync_flags), str(self.pgdata), str(self.ssh), str(self.ssh_flags), str(self.user), str(host), str(self.r_archivedir))
-                    self.flush_check_func()
-                    check = self.check_pgpid_func()
-                    if check == 0:
-                        print "ERROR: Can not enter flush mode if PG is already running"
-                        raise ArchiveFailure
-                else:
-                    rsync_transfer = """%s %s -q -e "%s %s" %s %s@%s:%s""" % (str(self.rsync), str(self.rsync_flags), str(self.ssh), str(self.ssh_flags), str(self.archivefile), str(self.user), str(host), str(self.r_archivedir))
-                if self.debug:
-                    print "NOTICE: Shipping archive to: " + str(host)
-                    print "NOTICE: Using: " + rsync_transfer
-                retval = os.system("%s" % (rsync_transfer))
-                if retval:
-                    if self.flush:
-                        # don't try to enqueue the segment archived if this is a flush
-                        print "FATAL: unable to flush pg_xlog to host %s" % (str(host),)
-                        raise ArchiveFailure
-                    print "NOTICE: no luck shipping archive"
-                    queue_dir = os.path.join(self.l_archivedir, host)
-                    queue_transfer = """%s %s %s""" % (str(self.rsync), str(self.archivefile), str(queue_dir))
-                    retval = os.system(queue_transfer)
-                    if retval:
-                        print "FATAL: Unable to rsync_transfer or queue_transfer"
-                        self.notify_external(critical=True, message=str(retval))
-                        raise ArchiveFailure
-                    else:
-                        self.notify_external(warning=True, message=str(retval))
-                else:
-                    if self.debug:
-                        print "NOTICE: Sending OK alert"
-                    self.notify_external(ok=True, message=str(retval))
-        except ArchiveFailure:
-            # archiver process was unable to archive the wal segment
-            return False
-        except Exception, e:
-            # generic exception
-            print "ERROR: %s" % (e,)
-            return False
-        else:
-            # WAL segment successfully archived or queued
-            return True
+        #Send any existing queues, and queue to any that failed.
+        slaves = self.handle_queues()
+        self.debuglog("handle_queues() handled successfully")
 
+        #Attempt to ship self.archivefile to slaves that are reachable
+        for slave in slaves:
+            self.ship_log_func(slave)
+            self.debuglog("ship_log_func(%s) handled successfully" % slave)
+
+        self.log("Archiving of %s handled successfully" % self.archivefile)
+        
 if __name__ == '__main__':
 
     # before we do anything, let's just check you we are
@@ -358,7 +344,11 @@ if __name__ == '__main__':
         success = archiver.check_config_func()
         if success:
             if archiver.archivefile:
-                success = archiver.archive_func()
+                try:
+                    success = archiver.archive_func()
+                except:
+                    success = False
+                    print archiver.pull_exception()
             else:
                 print "Config OK.  Use -F FILE to actually archive one."
                 success = False  # in case this was put into production
@@ -366,4 +356,3 @@ if __name__ == '__main__':
         sys.exit(0)
     else:
         sys.exit(1)
-        
