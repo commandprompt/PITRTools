@@ -162,7 +162,7 @@ class CMDWorker(object):
                 self.log(message)
 
         self.debuglog("notify_external exec_str: %s" % exec_str)
-        subprocess.call(exec_str)
+        subprocess.call(exec_str, shell=True)
 
     def check_pgpid_func(self):
         """
