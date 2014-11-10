@@ -310,7 +310,9 @@ class CMDArchiver(CMDWorker):
             self.debuglog("ship_log_func(%s) handled successfully" % slave)
 
         self.log("Archiving of %s handled successfully" % self.archivefile)
-        
+        return True
+
+
 if __name__ == '__main__':
 
     # before we do anything, let's just check you we are
