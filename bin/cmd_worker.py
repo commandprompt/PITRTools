@@ -145,9 +145,12 @@ class CMDWorker(object):
         * message                      - string  - None    - Will be appended to the end of the command. 
         """
 
-        #Return if we don't have an alert status or if none of the notify commands are set in the config
-        if not True in (ok, warning, critical):
+        #Return if we don't have an alert status
+        if not any((ok, warning, critical)):
             return
+        if log and message:
+            self.log(message)
+        #Return if none of the notify commands are set in the config, but not before logging message
         if not filter(len, [self.notify_ok, self.notify_warning, self.notify_critical]):
             return
         if ok:
@@ -157,9 +160,7 @@ class CMDWorker(object):
         elif critical:
             exec_str = "%s" % (self.notify_critical,)
         if message:
-            exec_str ="%s %s" % (exec_str, message,)
-            if log:
-                self.log(message)
+            exec_str += " %s" % (message,)
 
         self.debuglog("notify_external exec_str: %s" % exec_str)
         subprocess.call(exec_str, shell=True)
