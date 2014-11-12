@@ -38,6 +38,9 @@ queue_user: postgres
 ; number of seconds to sleep between syncs to slaves
 queue_wait: 5
 
+; maximum allowed number of parallel WAL-shipping workers
+max_queue_workers: 1
+
 ; command to process in ok
 notify_ok: echo OK
 

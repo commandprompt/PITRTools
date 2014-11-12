@@ -54,6 +54,7 @@ classdict = (('rsync_flags', 's', ""),
              ('includepath', 's', None),
              ('ssh_debug', 'b', False),
              ('queue_user', 's', None),
+             ('max_queue_workers', 'i', None),
              ('queue_wait', 'i', None))
 
 pid_file_name = "cmd_queue.pid"
@@ -61,6 +62,10 @@ pid_file_name = "cmd_queue.pid"
 class CMDQueue(CMDWorker):
 
     def check_config(self):
+        if self.max_queue_workers <= 0:
+            self.log("The max_queue_workers setting should be greater than zero.", "ERROR")
+            return False
+
         import pwd
         if os.geteuid() != pwd.getpwnam(self.queue_user).pw_uid:
             self.log("Only user '%s' is allowed to run cmd_queue according to the config file." % self.queue_user)
@@ -110,11 +115,14 @@ class CMDQueue(CMDWorker):
         else:
             cmd.append("-q")
         self.debuglog("Shipping pending logs via: %s" % cmd)
-        ret = subprocess.call(cmd)
-        if ret:
-            self.notify_external(log=True, critical=True, message="ship_logs_to_slave: rsync error %d when shipping to %s" % (ret, slave))
-        else:
-            self.notify_external(log=True, ok=True, message="0")
+        return subprocess.Popen(cmd)
+
+    def wait_for_worker(self):
+        pid, ret = os.wait()
+        self.debuglog("a child rsync worker PID %d finished with status %d" % (pid, ret))
+        child = self.workers.pop(pid)
+        if ret != 0:
+            self.notify_external(log=True, critical=True, message="rsync error %d when shipping to %s" % (ret, child.slave_name))
 
     def process_new_archive_files(self):
         """
@@ -152,11 +160,28 @@ class CMDQueue(CMDWorker):
         slaves = self.list_pending_slaves()
         self.debuglog("list of slaves pending sync: %s" % repr(slaves))
         for slave in slaves:
+            self.debuglog("going to ship logs to slave '%s'" % slave)
+            # Check if we've already running the maximum allowed
+            # number of worker rsync processes, if so wait for one of
+            # them to finish.
+            if len(self.workers) >= self.max_queue_workers:
+                self.debuglog("we're already running %d child workers, waiting..." % len(self.workers))
+                self.wait_for_worker()
+
+            # there's at least one free worker slot, start a worker:
             try:
-                self.ship_logs_to_slave(slave)
-                self.debuglog("ship_logs_to_slave(%s) handled successfully" % slave)
+                child = self.ship_logs_to_slave(slave)
+                self.debuglog("started child rsync worker PID %d" % child.pid)
+                child.slave_name = slave
+                self.workers[child.pid] = child
             except Exception, e:
                 self.log(e, "ERROR")
+
+        if len(self.workers) > 0:
+            self.debuglog("waiting for any remaining workers to finish...")
+            while len(self.workers) > 0:
+                self.wait_for_worker()
+            self.debuglog("all workers finished")
 
     def check_postmaster_alive(self):
         return os.path.exists(os.path.join(self.pgdata, "postmaster.pid"))
@@ -164,6 +189,7 @@ class CMDQueue(CMDWorker):
     def run(self):
         import time
 
+        self.workers = dict()  # a mapping of PIDs to Popen objects
         while True:
             self.update_slaves()
             if not self.check_postmaster_alive():
