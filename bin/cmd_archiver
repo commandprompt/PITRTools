@@ -105,7 +105,7 @@ class CMDArchiver(CMDWorker):
         Let's make sure that our directories and executables exist
         """
         self.cmd_queue = os.path.join(self.pitr_bin_path, "cmd_queue")
-        pathvars = [self.pgdata, self.l_archivedir, self.cmd_queue]
+        pathvars = [self.rsync, self.pgdata, self.l_archivedir, self.cmd_queue]
         for element in pathvars:
             try:
                 os.stat("%s" % (str(element)))
@@ -151,10 +151,17 @@ class CMDArchiver(CMDWorker):
             # recycle the WAL file at the same inode.  The cmd_queue
             # will establish hardlinks to individual slave subdirs,
             # thus no extra space is taken by the WAL queue.
-            self.debuglog("copying %s to %s/" % (self.archivefile, self.l_archivedir))
-            import shutil
-            shutil.copy(os.path.join(self.pgdata, self.archivefile),
-                        os.path.join(self.l_archivedir, ""))
+            
+            # Local rsync does a better job when the file is already
+            # there (e.g. when cmd_queue is at fault).
+            self.debuglog("local rsync %s to %s/" % (self.archivefile, self.l_archivedir))
+            rsync = [self.rsync,
+                     os.path.join(self.pgdata, self.archivefile),
+                     os.path.join(self.l_archivedir, "")]
+            ret = subprocess.call(rsync)
+            if ret != 0:
+                self.notify_external(log=True, critical=True, message=("local rsync returned error status: %d" % ret))
+                return False
 
             # We call cmd_queue every time and let it figure itself if
             # there's a copy running already.  In case there is none,
