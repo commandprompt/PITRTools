@@ -74,6 +74,9 @@ class CMDQueue(CMDWorker):
             return False
 
         pathvars = [self.rsync, self.pgdata, self.l_archivedir]
+        for slave in self.slaves_list:
+            pathvars.append(os.path.join(self.l_archivedir, slave))
+
         for element in pathvars:
             try:
                 os.stat("%s" % (str(element)))
@@ -85,9 +88,12 @@ class CMDQueue(CMDWorker):
     def list_pending_slaves(self):
         hosts = []
         for slave in self.slaves_list:
-            if os.listdir(os.path.join(self.l_archivedir, slave)):
-                hosts.append(slave)
-                self.debuglog("slave `%s' queue not empty" % slave)
+            try:
+                if os.listdir(os.path.join(self.l_archivedir, slave)):
+                    hosts.append(slave)
+                    self.debuglog("slave `%s' queue not empty" % slave)
+            except OSError, e:
+                self.log(e, "ERROR")
         return hosts
 
     def ship_logs_to_slave(self, slave):
@@ -136,6 +142,7 @@ class CMDQueue(CMDWorker):
                             self.notify_external(log=True, critical=True, message=("Failed to link archive file: %s" % e))
                 # Only unlink the original name when every of the
                 # slaves has got a link.
+                self.debuglog("linked to %d slave dirs out of %d" % (linked, len(self.slaves_list)))
                 if linked == len(self.slaves_list):
                     os.unlink(file)
 
