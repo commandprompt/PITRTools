@@ -127,6 +127,7 @@ class CMDWorker(object):
 
         timestamp = time.strftime("%F %T %Z")
         print "[%s] %s: %s" % (timestamp, level, msg)
+        sys.stdout.flush()  # in case we've been running under logging collector
 
     def debuglog(self, msg):
         if self.debug:

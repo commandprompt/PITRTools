@@ -23,76 +23,56 @@ PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 """
 
+import os
+import errno
+import subprocess
 from cmd_worker import CMDWorker
-import Threading
 
-argslist = (("-I", "--init", 
-             dict(dest="init", action="store_true",help="Initialize master environment")),
-            ("-f", "--flush",
-             dict(dest="flush", action="store_true", help="Flush all remaining archives to slave")))
+argslist = (("-C", "--config",
+             dict(dest="configfilename",
+                  action="store",
+                  help="the name of the archiver config file",
+                  metavar="FILE",
+                  default='cmd_archiver.ini')),
+            ("-d", "--daemon",
+             dict(dest="daemon",
+                  action="store_true",
+                  help="background daemon mode")))
 
-classdict = (('state', 's', None),
-            ('rsync_flags', 's', ""),
-            ('slaves', 's', None),
-            ('user', 's', None),
-            ('r_archivedir', 's', None),
-            ('l_archivedir', 's', None),
-            ('ssh_timeout', 'i', None),
-            ('notify_ok', 's', None),
-            ('notify_warning', 's', None),
-            ('notify_critical', 's', None),
-            ('debug', 'b', False),
-            ('pgdata', 's', None),
-            ('pgcontroldata', 's', ""),
-            ('rsync_version', 'i', None),
-            ('includepath', 's', None),
-            ('ssh_debug', 'b', False))
+classdict = (('rsync_flags', 's', ""),
+             ('slaves', 's', None),
+             ('user', 's', None),
+             ('r_archivedir', 's', None),
+             ('l_archivedir', 's', None),
+             ('ssh_timeout', 'i', None),
+             ('notify_ok', 's', None),
+             ('notify_warning', 's', None),
+             ('notify_critical', 's', None),
+             ('debug', 'b', False),
+             ('pgdata', 's', None),
+             ('rsync_version', 'i', None),
+             ('includepath', 's', None),
+             ('ssh_debug', 'b', False),
+             ('queue_user', 's', None),
+             ('queue_wait', 'i', None))
 
-class CMDQueueWorker(threading.Thread):
-    
+pid_file_name = "cmd_queue.pid"
 
 class CMDQueue(CMDWorker):
-    def generate_slave_list_func(self):
-        """
-        We now support multiple slaves (see the README) in order do that properly
-        we have to break up the string and turn it into a list
-        """
-        self.slaves_list = slaves.strip("'").split(",")
-        self.debuglog("generate_slave_list_func(): slaves_list = %s" % slaves)
-        
 
-    def init_env_func(self):
-        """
-        Initialize the local queues so we can check each directory for left
-        over files
-        """
-        self.debuglog("init_env_func(): entered")
-        l_archivedir = self.l_archivedir
-        # bail out if archivedir exists and not empty or inaccessible.
-        if (os.access(l_archivedir, F_OK)):
-            if (not os.access(l_archivedir, R_OK | W_OK | X_OK)):
-                self.log("init_env_func(): l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir, "ERROR")
-                return False
-            elif (os.listdir(l_archivedir) != []):
-                self.log("init_env_func(): l_archivedir %s must be be empty" % l_archivedir, "ERROR")
-                return False
-            else:
-                self.log("init_env_func(): l_archivedir %s already exists" % l_archivedir, "WARNING")
-        queues = self.slaves_list
-        try:
-            for host in queues:
-                queue = os.path.join(l_archivedir, host)
-                os.makedirs("%s" % (queue))
-        except OSError, e:
-            self.log("init_env_func(): Can not make queue directories", "ERROR")
-            print "EXCEPTION: %s" % (str(e))
-            exit(1)
+    def check_config(self):
+        import pwd
+        if os.geteuid() != pwd.getpwnam(self.queue_user).pw_uid:
+            self.log("Only user '%s' is allowed to run cmd_queue according to the config file." % self.queue_user)
+            return False
 
-    def check_config_func(self):
-        """
-        Let's make sure that our directories and executables exist
-        """
-        self.debuglog("check_config_func(): entered")
+        self.pid_file = os.path.join(self.l_archivedir, pid_file_name)
+
+        self.slaves_list = self.slaves.strip("'").split(",")
+        if not any(self.slaves_list):
+            self.log("Refusing to run with empty or invalid slaves list.", "ERROR")
+            return False
+
         pathvars = [self.rsync, self.pgdata, self.l_archivedir]
         for element in pathvars:
             try:
@@ -102,187 +82,182 @@ class CMDQueue(CMDWorker):
                 return False
         return True
 
-    def get_pgcontroldata_func(self):
-        """
-        get_pgcontroldata_func doesn't actually do anything yet. This is more
-        for archival purposes so we can remember the regex
-        """
-        if not self.pgcontroldata:
-            print 'WARNING: path to pg_controldata utility is not set, assuming it\'s in PATH'
-            pgcontroldata = 'pg_controldata'
-        else:
-            pgcontroldata = self.pgcontroldata
-        try:
-            cmd = os.popen("%s %s" % (str(pgcontroldata), str(self.pgdata)))
-            #return cmd.readlines
-            for row in cmd:
-                match = re.search('^Prior checkpoint location: *.{1,}', '%s' % (str(row)))
-                if match != None:
-                    print match
-        except OSError, e:
-            self.log("get_pgcontroldata_func(): %s" % e, "ERROR")
-            exit(1)
-
-    def flush_check_func(self):
-        """
-        Simple function to make sure we require input before flushing a system
-        """
-        self.debuglog("flush_check_func(): entered")
-        print "\n\n"
-        print "Warning! Flushing all logs will cause your slave to exit"
-        print "Standby and start up. Please verify that this is exactly what you desire.\n\n"""
-
-        print "I wish to force my slave into production: No/Yes\n\n"
-
-        line = str(raw_input())
-        if line == "Yes":
-            print "Flushing all xlogs"
-            return
-        elif line == "No":
-            print "Exiting!"
-        else:
-            print "Your options are Yes and No"
-        return False
-
-    def list_queue_func(self):
-        """
-        We only want to process archives for queues that have files, so we check
-        and only return a queue/slave that has files to be shipped.
-        """
-        self.debuglog("list_queue_func(): entered")
-        # Empty host array
+    def list_pending_slaves(self):
         hosts = []
-
-        # Loop through the list of slaves
-        slaves = self.slaves_list
-        for host in slaves:
-            queuedir = os.path.join(self.l_archivedir, host)
-            list_archives = os.listdir(queuedir)
-            # If an archive directory is not empty, then we're good.
-            if list_archives:
-                # add to list of hosts
-                hosts.append(host)
-                self.debuglog("list_queue_func(): host `%s' queue not empty" % host)
+        for slave in self.slaves_list:
+            if os.listdir(os.path.join(self.l_archivedir, slave)):
+                hosts.append(slave)
+                self.debuglog("slave `%s' queue not empty" % slave)
         return hosts
 
-    def send_queue_func(self):
-        """
-        We are called before normal archive process in order to send queue files
-        that have not been shipped yet. If we have to transfer and we error we
-        return the slave that failed.
-        """
-        rtn = []
-        self.debuglog("send_queue_func(): entered")
-
-        for host in self.list_queue_func():
-            if self.debug:
-                print "NOTICE: Host = " + host
-            queue_dir = os.path.join(self.l_archivedir, host)
-            if self.debug:
-                print "NOTICE: queue_dir = " + queue_dir
-            # To deal with old versions of rsync
-            if self.rsync_version == 2:
-                #Old rsync version, needs a different flag
-                source_or_sent = "--remove-sent-files"
-            else:
-                source_or_sent = "--remove-source-files"
-
-            queue_transfer = """%s %s -aq %s -e \"%s %s\" %s/ %s@%s:%s/""" % (str(self.rsync), str(self.rsync_flags), str(source_or_sent), str(self.ssh), str(self.ssh_flags), str(queue_dir), str(self.user), str(host), str(self.r_archivedir))
-
-            self.debuglog("send_queue_func(): host = %s, queue_dir = %s, rsync_version = %d" % (host, queue_dir, self.rsync_version))
-            self.debuglog("send_queue_func(): transferring queue via: %s" % queue_transfer)
-
-            retval = os.system(queue_transfer)
-            if retval:
-                # If we failed to send data to this host - append it to the list
-                # of hosts to retry the sending attempt on
-                rtn.append(host)
-        self.debuglog("send_queue_func(): unreachable hosts: %s" % ", ".join(rtn))
-        return rtn
-
-    def queue_log_func(self, slave):
-        """
-        Queue the current log file (self.archivefile) to a slave.
-        
-        slave is name of slave to queue for
-        """
-
-        queue_dir = os.path.join(self.l_archivedir, slave)
-        queue_transfer = "%s %s %s" % (self.rsync, self.archivefile, queue_dir)
-
-        self.debuglog("queue_log_func(): Queueing log via: %s" % queue_transfer)
-        ret = subprocess.call(queue_transfer)
+    def ship_logs_to_slave(self, slave):
+        cmd = [self.rsync]
+        cmd.append("--remove-sent-files" if self.rsync_version == 2 else "--remove-source-files")
+        archivepath = os.path.join(self.l_archivedir, slave, "") # ensure trailing /
+        cmd.extend(['-e', '%s %s' % (self.ssh, self.ssh_flags),
+                    '-r', archivepath,
+                    '%s@%s:%s/' % (self.user, slave, self.r_archivedir)])
+        # extra flags should follow default ones to take effect
+        cmd.extend(self.rsync_flags.split())
+        if self.debug:
+            cmd.append("-v")
+        else:
+            cmd.append("-q")
+        self.debuglog("Shipping pending logs via: %s" % cmd)
+        ret = subprocess.call(cmd)
         if ret:
-            #Rsync returned non-zero exit status. 
-            self.notify_external(log=True, critical=True, message="queue_log_func: rsync error %d" % ret)
-            raise ArchiveFailure
-        self.notify_external(ok=True, message="0")
-        
-    def ship_log_func(self, slave):
-        """
-        Ship the current log file (self.archivefile) to a slave. Queue the log for them if we fail.
+            self.notify_external(log=True, critical=True, message="ship_logs_to_slave: rsync error %d when shipping to %s" % (ret, slave))
+        else:
+            self.notify_external(log=True, ok=True, message="0")
 
-        slave is name of slave to queue for
+    def process_new_archive_files(self):
         """
-        archivepath = os.path.join(self.pgdata, self.archivefile)
-        rsync_flags_list = self.rsync_flags.split()
-
-        log_transfer_cmd = [self.rsync]
-        log_transfer_cmd.extend(rsync_flags_list)
-        log_transfer_cmd.extend(['-q', '-e', '%s %s' % (self.ssh, self.ssh_flags), archivepath,
-                                 '%s@%s:%s' % (self.user, slave, self.r_archivedir)])
-        
-        self.log("Shipping %s to %s" % (self.archivefile, slave))
-        self.debuglog("ship_log_func(): Shipping log via: %s" % log_transfer_cmd)
-        ret = subprocess.call(log_transfer_cmd)
-        if ret:
-            #Rsync returned non-zero exit status
-            self.notify_external(log=True, critical=True, message="ship_log_func: rsync error %d" % ret)
-            self.queue_log_func(slave)
-            self.debuglog("queue_log_func(%s) handled successfully" % slave)
-        self.notify_external(log=True, ok=True, message="0")
-        
-    def handle_queues(self):
+        Hard-link any files found under local archive dir to the slave
+        subdirs, removing the original link name.  Skip our .pid file.
         """
-        Try to ship any existing slave queues. If we cannot send to a slave, queue self.archivefile for them.
-        
-        Returns a list of slaves that were not queued to.
-        """
+        self.debuglog("checking for new archive files in %s" % self.l_archivedir)
+        files = os.listdir(self.l_archivedir)
+        for name in files:
+            file = os.path.join(self.l_archivedir, name)
+            # process regular files only, exclude our own .pid file
+            if name != pid_file_name and os.path.isfile(file):
+                self.debuglog("Found new archive file: %s" % name)
+                # count the number of links to the original name
+                linked = 0
+                for slave in self.slaves_list:
+                    target = os.path.join(self.l_archivedir, slave, name)
+                    try:
+                        os.link(file, target)
+                        linked += 1
+                    except OSError, e:
+                        if e.errno == errno.EEXIST:
+                            linked += 1
+                        else:
+                            self.notify_external(log=True, critical=True, message=("Failed to link archive file: %s" % e))
+                # Only unlink the original name when every of the
+                # slaves has got a link.
+                if linked == len(self.slaves_list):
+                    os.unlink(file)
 
-        slaves = self.slaves_list
-        failed_slaves = self.send_queue_func()
-        if not failed_slaves:
-            return []
-        self.notify_external(log=True,
-                             warning=True, 
-                             message="Couldn't send existing queues for hosts: %s. Queueing %s for them." % (", ".join(failed_slaves), self.archivefile))            
-        for slave in failed_slaves:
-            self.queue_log_func(slave)
-            self.debuglog("queue_log_func(%s) handled successfully" % slave)
+    def update_slaves(self):
+        self.process_new_archive_files()
 
-        #Don't try to ship a log if we just queued it
-        return set(slaves).difference(set(failed_slaves))
+        slaves = self.list_pending_slaves()
+        self.debuglog("list of slaves pending sync: %s" % repr(slaves))
+        for slave in slaves:
+            try:
+                self.ship_logs_to_slave(slave)
+                self.debuglog("ship_logs_to_slave(%s) handled successfully" % slave)
+            except Exception, e:
+                self.log(e, "ERROR")
+
+    def check_postmaster_alive(self):
+        return os.path.exists(os.path.join(self.pgdata, "postmaster.pid"))
 
     def run(self):
-        """
-        
-        """
-        self.debuglog("archive_func: self.archivefile = %s" % self.archivefile)
-        if self.state != "online":
-            self.notify_external(log=True, warning=True, message="cmd_archiver offline, queuing archives")
+        import time
+
+        while True:
+            self.update_slaves()
+            if not self.check_postmaster_alive():
+                # this is not the loop condition to make sure we run
+                # at least once
+                self.log("postmaster isn't running anymore, exiting", "NOTICE")
+                break
+            self.debuglog("sleeping for %d seconds" % self.queue_wait)
+            time.sleep(self.queue_wait)
+
+    def check_pid_file(self):
+        file = None
+        try:
+            self.debuglog("trying to open pid file: %s" % self.pid_file)
+            file = open(self.pid_file)
+            other_pid = int(file.readline())
+            self.debuglog("checking PID %d" % other_pid)
+            os.kill(other_pid, 0)
             return False
+        except IOError, e:
+            self.debuglog(repr(e))
+            if e.errno != errno.ENOENT:
+                self.log("Failed to read the PID file: %s", e)
+                return False
+        except ValueError, e:
+            # assume no other instance running
+            self.debuglog(repr(e))
+        except OSError, e:
+            self.debuglog(repr(e))
+            if e.errno != errno.ESRCH:  # No such process
+                return False
+        except Exception, e:
+            self.log(e, "ERROR")
+        finally:
+            if file:
+                file.close()
+        return True # this means no other pid is running
 
-        #Send any existing queues, and queue to any that failed.
-        slaves = self.handle_queues()
-        self.debuglog("handle_queues() handled successfully")
+    def make_pid_file(self):
+        file = None
+        try:
+            self.debuglog("writing pid file: %s" % self.pid_file)
+            file = open(self.pid_file, "w")
+            file.write("%s\n" % os.getpid())
+            return True
+        except Exception, e:
+            self.log(e, "ERROR")
+            return False
+        finally:
+            if file:
+                file.close()
 
-        #Attempt to ship self.archivefile to slaves that are reachable
-        for slave in slaves:
-            self.ship_log_func(slave)
-            self.debuglog("ship_log_func(%s) handled successfully" % slave)
+    def main(self):
+        # before we do anything, let's just check who we are
+        if os.geteuid() == 0:
+            exit("\nBad Mojo... no root access for this script\n")
 
-        self.log("Archiving of %s handled successfully" % self.archivefile)
+        (options, args) = self.parse_commandline_arguments(argslist)
+        configfilename = options.configfilename
+        self.daemon = options.daemon
 
-classdict = (('queue_retry_delay', 'i', 5))
-    
+        try:
+            cfg_vals = self.load_configuration_file(configfilename)
+        except Exception, e:
+            self.log(e, "ERROR")
+            exit(2)
 
+        self.set_ssh_flags()
+        self.get_bin_paths_func(options)
+
+        success = self.check_config()
+        if success:
+            if not self.check_pid_file():
+                print "An instance of cmd_queue is already running?"
+                # this should return success as cmd_archiver is
+                # running us every time
+            else:
+                if self.daemon:
+                    self.debuglog("going into background daemon mode...")
+                    # set SIGHUP handler beforehand to avoid race
+                    # condition after fork()
+                    import signal
+                    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+
+                    pid = os.fork()
+                    if pid != 0:
+                        self.debuglog("forked PID %d" % pid)
+                        exit(0)
+                    # the child process goes on
+
+                success = self.make_pid_file()
+                if success:
+                    self.run()
+                    os.unlink(self.pid_file)
+
+        retval = (0 if success else 1)
+        self.debuglog("cmd_queue exiting with status %d" % retval)
+        return retval
+
+
+if __name__ == '__main__':
+    queue = CMDQueue(classdict)
+    retval = queue.main()
+    exit(retval)

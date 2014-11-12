@@ -32,6 +32,12 @@ user: postgres
 ; if rsync can't connect in 10 seconds error
 ssh_timeout: 10
 
+; Unix user name that is allowed to run the cmd_queue process
+queue_user: postgres
+
+; number of seconds to sleep between syncs to slaves
+queue_wait: 5
+
 ; command to process in ok
 notify_ok: echo OK
 
