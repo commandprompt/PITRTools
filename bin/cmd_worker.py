@@ -125,7 +125,7 @@ class CMDWorker(object):
         * level    - string - NOTICE  - Log level to prepend to message
         """
 
-        timestamp = time.strftime("%b.%d.%Y %R:%S")
+        timestamp = time.strftime("%F %T %Z")
         print "[%s] %s: %s" % (timestamp, level, msg)
 
     def debuglog(self, msg):
