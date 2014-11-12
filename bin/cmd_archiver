@@ -38,8 +38,6 @@ argslist = (('-F', '--file', dict(dest="archivefilename",
                ("-C", "--config", dict(dest="configfilename",
                 action="store",  help="the name of the archiver config file",
                 metavar="FILE", default='cmd_archiver.ini')),
-               ("-f", "--flush", dict(dest="flush", action="store_true",
-                help="Flush all remaining archives to slave")),
                ("-I", "--init", dict(dest="init", action="store_true",
                 help="Initialize master environment")))
 
@@ -138,27 +136,6 @@ class CMDArchiver(CMDWorker):
         except OSError, e:
             self.log("get_pgcontroldata_func(): %s" % e, "ERROR")
             exit(1)
-
-    def flush_check_func(self):
-        """
-        Simple function to make sure we require input before flushing a system
-        """
-        self.debuglog("flush_check_func(): entered")
-        print "\n\n"
-        print "Warning! Flushing all logs will cause your slave to exit"
-        print "Standby and start up. Please verify that this is exactly what you desire.\n\n"""
-
-        print "I wish to force my slave into production: No/Yes\n\n"
-
-        line = str(raw_input())
-        if line == "Yes":
-            print "Flushing all xlogs"
-            return
-        elif line == "No":
-            print "Exiting!"
-        else:
-            print "Your options are Yes and No"
-        return False
 
     def list_queue_func(self):
         """
@@ -321,7 +298,6 @@ if __name__ == '__main__':
     init = options.init
 
     archiver.archivefile = options.archivefilename
-    archiver.flush = options.flush
 
     try:
         cfg_vals = archiver.load_configuration_file(configfilename)
