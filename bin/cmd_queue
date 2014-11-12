@@ -128,13 +128,19 @@ class CMDQueue(CMDWorker):
         """
         Hard-link any files found under local archive dir to the slave
         subdirs, removing the original link name.  Skip our .pid file.
+
+        Occasionally, we might grab a rsync's temp file that it's going
+        to rename to the final destination.  Fortunately, these temp
+        file names are starting with a dot.  Let's ignore any "hidden"
+        files anyway.
         """
         self.debuglog("checking for new archive files in %s" % self.l_archivedir)
         files = os.listdir(self.l_archivedir)
         for name in files:
             file = os.path.join(self.l_archivedir, name)
-            # process regular files only, exclude our own .pid file
-            if name != pid_file_name and os.path.isfile(file):
+            # process regular files only, exclude our own .pid file and
+            # any "hidden" files
+            if not name.startswith('.') and name != pid_file_name and os.path.isfile(file):
                 self.debuglog("Found new archive file: %s" % name)
                 # count the number of links to the original name
                 linked = 0
