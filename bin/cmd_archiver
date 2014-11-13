@@ -57,11 +57,6 @@ classdict = (('state', 's', None),
             ('ssh_debug', 'b', False))
 
 
-class ArchiveFailure(Exception):
-    """ Class to propagate archiving failures """
-    pass
-
-
 class CMDArchiver(CMDWorker):
 
     def generate_slave_list_func(self):
