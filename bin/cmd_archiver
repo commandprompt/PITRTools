@@ -31,13 +31,21 @@ import sys
 import subprocess
 from cmd_worker import CMDWorker
 
-argslist = (('-F', '--file', dict(dest="archivefilename",
-                action="store", help="Archive file", metavar="FILE")),
-               ("-C", "--config", dict(dest="configfilename",
-                action="store",  help="the name of the archiver config file",
-                metavar="FILE", default='cmd_archiver.ini')),
-               ("-I", "--init", dict(dest="init", action="store_true",
-                help="Initialize master environment")))
+argslist = (("-C", "--config",
+             dict(dest="configfilename",
+                  action="store",
+                  help="the name of the archiver config file",
+                  metavar="FILE",
+                  default='cmd_archiver.ini')),
+            ('-F', '--file',
+             dict(dest="archivefile",
+                  action="store",
+                  help="Archive file",
+                  metavar="FILE")),
+            ("-I", "--init",
+             dict(dest="init",
+                  action="store_true",
+                  help="Initialize master environment")))
 
 classdict = (('state', 's', None),
             ('rsync_flags', 's', ""),
@@ -59,58 +67,40 @@ classdict = (('state', 's', None),
 
 class CMDArchiver(CMDWorker):
 
-    def generate_slave_list_func(self):
-        """
-        We now support multiple slaves (see the README) in order do that properly
-        we have to break up the string and turn it into a list
-        """
-        slaves = str(self.slaves).replace("'", "").split(",")
-        self.debuglog("generate_slave_list_func(): slaves = %s" % slaves)
-        return slaves
-
     def init_env_func(self):
         """
         Initialize the local queues so we can check each directory for left
         over files
         """
         self.debuglog("init_env_func(): entered")
-        l_archivedir = self.l_archivedir
         # bail out if archivedir exists and not empty or inaccessible.
-        if (os.access(l_archivedir, os.F_OK)):
-            if (not os.access(l_archivedir, os.R_OK | os.W_OK | os.X_OK)):
-                self.log("init_env_func(): l_archivedir %s must allow have r/w/x bits set for the current user" % l_archivedir, "ERROR")
-                return False
-            elif (os.listdir(l_archivedir) != []):
-                self.log("init_env_func(): l_archivedir %s must be be empty" % l_archivedir, "ERROR")
-                return False
-            else:
-                self.log("init_env_func(): l_archivedir %s already exists" % l_archivedir, "WARNING")
-        queues = self.generate_slave_list_func()
-        try:
-            for host in queues:
-                queue = os.path.join(l_archivedir, host)
-                os.makedirs("%s" % (queue))
-        except OSError, e:
-            self.log("init_env_func(): Can not make queue directories", "ERROR")
-            print "EXCEPTION: %s" % (str(e))
-            exit(1)
+        if os.access(self.l_archivedir, os.F_OK):
+            if not os.access(self.l_archivedir, os.R_OK | os.W_OK | os.X_OK):
+                raise Exception("init_env_func(): l_archivedir %s must have r/w/x bits set for the current user" % self.l_archivedir)
 
-    def check_config_func(self):
-        """
-        Let's make sure that our directories and executables exist
-        """
+            elif any(os.listdir(self.l_archivedir)):
+                raise Exception("init_env_func(): l_archivedir %s must be be empty" % self.l_archivedir)
+
+            else:
+                self.log("init_env_func(): l_archivedir %s already exists" % self.l_archivedir, "WARNING")
+
+        mode = 0700
+        if not os.path.exists(self.l_archivedir):
+            os.mkdir(self.l_archivedir, mode)
+        for slave in self.slaves_list:
+            os.mkdir(os.path.join(self.l_archivedir, slave), mode)
+
+    def check_config(self):
+        super(CMDArchiver, self).check_config()
+
         self.cmd_queue = os.path.join(self.pitr_bin_path, "cmd_queue")
-        pathvars = [self.rsync, self.pgdata, self.l_archivedir, self.cmd_queue]
-        for element in pathvars:
-            try:
-                os.stat("%s" % (str(element)))
-            except OSError, e:
-                print "Config %s:  %s" % (str(element), str(e))
-                return False
+        pathvars = [self.pgdata, self.cmd_queue]
+        if not self.options.init:
+            pathvars.append(self.l_archivedir)
+        self.check_paths(pathvars)
+
         if not os.access(self.cmd_queue, os.X_OK):
-            self.log("The cmd_queue file must have executable flag set.")
-            return False
-        return True
+            raise Exception("The cmd_queue file must have executable flag set.")
 
     def get_pgcontroldata_func(self):
         """
@@ -134,7 +124,7 @@ class CMDArchiver(CMDWorker):
             exit(1)
 
     def archive_func(self):
-        self.log("Archiving %s" % self.archivefile)
+        self.log("Archiving %s" % self.options.archivefile)
 
         if self.state != "online":
             self.notify_external(log=True, warning=True, message="cmd_archiver offline, queuing archives")
@@ -149,9 +139,9 @@ class CMDArchiver(CMDWorker):
             
             # Local rsync does a better job when the file is already
             # there (e.g. when cmd_queue is at fault).
-            self.debuglog("local rsync %s to %s/" % (self.archivefile, self.l_archivedir))
+            self.debuglog("local rsync %s to %s/" % (self.options.archivefile, self.l_archivedir))
             rsync = [self.rsync,
-                     os.path.join(self.pgdata, self.archivefile),
+                     os.path.join(self.pgdata, self.options.archivefile),
                      os.path.join(self.l_archivedir, "")]
             ret = subprocess.call(rsync)
             if ret != 0:
@@ -161,7 +151,7 @@ class CMDArchiver(CMDWorker):
             # We call cmd_queue every time and let it figure itself if
             # there's a copy running already.  In case there is none,
             # the daemon flag comes handy.
-            cmd_queue = [self.cmd_queue, "-C", self.configfilename,
+            cmd_queue = [self.cmd_queue, "-C", self.options.configfilename,
                          "--daemon"]
             self.debuglog("running cmd_queue as: %s" % repr(cmd_queue))
             ret = subprocess.call(cmd_queue)
@@ -170,54 +160,38 @@ class CMDArchiver(CMDWorker):
                 return False
             return True
         except Exception, e:
-            self.notify_external(log=True, critical=True, message=("Failed to archive file '%s': %s" % (self.archivefile, e)))
+            self.notify_external(log=True, critical=True, message=("Failed to archive file '%s': %s" % (self.options.archivefile, e)))
             return False
+
+    def main(self):
+        # before we do anything, let's just check who we are
+        if os.geteuid() == 0:
+            exit("\nBad Mojo... no root access for this script\n")
+
+        retval = 0
+        try:
+            self.parse_commandline_arguments(argslist)
+            self.load_configuration_file()
+
+            if self.options.init:
+                print "We are initializing queues, one moment."
+                self.init_env_func()
+            else:
+                self.debuglog("Archiver running")
+                if self.options.archivefile:
+                    self.archive_func()
+                else:
+                    print "Config OK.  Use -F FILE to actually archive one."
+
+        except Exception, e:
+            self.log(e, "ERROR")
+            retval = 1
+
+        self.debuglog("Archiver exiting with status %d" % retval)
+        return retval
 
 
 if __name__ == '__main__':
-
-    # before we do anything, let's just check you we are
-    if os.geteuid() == 0:
-        sys.exit("\nBad Mojo... no root access for this script\n")
-
     archiver = CMDArchiver(classdict)
-    (options, args) = archiver.parse_commandline_arguments(argslist)
-    archiver.configfilename = options.configfilename
-    init = options.init
-
-    archiver.archivefile = options.archivefilename
-
-    try:
-        cfg_vals = archiver.load_configuration_file(archiver.configfilename)
-    except Exception, e:
-        archiver.log(e, "ERROR")
-        exit(2)
-
-    archiver.set_ssh_flags()
-
-    success = True
-    # Actually run
-    if init:
-        print "We are initializing queues, one moment.\n"
-        success = archiver.init_env_func()
-    else:
-        archiver.debuglog("Archiver running")
-        #Get binary paths and check config values
-        archiver.get_bin_paths_func(options)
-        success = archiver.check_config_func()
-        if success:
-            if archiver.archivefile:
-                try:
-                    success = archiver.archive_func()
-                except:
-                    success = False
-                    print archiver.pull_exception()
-            else:
-                print "Config OK.  Use -F FILE to actually archive one."
-                success = False  # in case this was put into production
-
-    archiver.debuglog("Archiver exiting with status %d" % (0 if success else 1))
-    if success:
-        sys.exit(0)
-    else:
-        sys.exit(1)
+    retval = archiver.main()
+    exit(retval)

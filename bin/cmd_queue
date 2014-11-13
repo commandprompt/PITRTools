@@ -62,33 +62,21 @@ pid_file_name = "cmd_queue.pid"
 class CMDQueue(CMDWorker):
 
     def check_config(self):
+        super(CMDQueue, self).check_config()
+
         if self.max_queue_workers <= 0:
-            self.log("The max_queue_workers setting should be greater than zero.", "ERROR")
-            return False
+            raise Exception("The max_queue_workers setting should be greater than zero.")
 
         import pwd
         if os.geteuid() != pwd.getpwnam(self.queue_user).pw_uid:
-            self.log("Only user '%s' is allowed to run cmd_queue according to the config file." % self.queue_user)
-            return False
+            raise Exception("Only user '%s' is allowed to run cmd_queue according to the config file." % self.queue_user)
 
         self.pid_file = os.path.join(self.l_archivedir, pid_file_name)
 
-        self.slaves_list = self.slaves.strip("'").split(",")
-        if not any(self.slaves_list):
-            self.log("Refusing to run with empty or invalid slaves list.", "ERROR")
-            return False
-
-        pathvars = [self.rsync, self.pgdata, self.l_archivedir]
+        pathvars = [self.pgdata, self.l_archivedir]
         for slave in self.slaves_list:
             pathvars.append(os.path.join(self.l_archivedir, slave))
-
-        for element in pathvars:
-            try:
-                os.stat("%s" % (str(element)))
-            except OSError, e:
-                print "Config %s:  %s" % (str(element), str(e))
-                return False
-        return True
+        self.check_paths(pathvars)
 
     def list_pending_slaves(self):
         hosts = []
@@ -240,40 +228,30 @@ class CMDQueue(CMDWorker):
             self.debuglog("writing pid file: %s" % self.pid_file)
             file = open(self.pid_file, "w")
             file.write("%s\n" % os.getpid())
-            return True
-        except Exception, e:
-            self.log(e, "ERROR")
-            return False
         finally:
             if file:
                 file.close()
+
+    def remove_pid_file(self):
+        if os.path.exists(self.pid_file):
+            os.unlink(self.pid_file)
 
     def main(self):
         # before we do anything, let's just check who we are
         if os.geteuid() == 0:
             exit("\nBad Mojo... no root access for this script\n")
 
-        (options, args) = self.parse_commandline_arguments(argslist)
-        configfilename = options.configfilename
-        self.daemon = options.daemon
-
+        retval = 0
         try:
-            cfg_vals = self.load_configuration_file(configfilename)
-        except Exception, e:
-            self.log(e, "ERROR")
-            exit(2)
+            self.parse_commandline_arguments(argslist)
+            self.load_configuration_file()
 
-        self.set_ssh_flags()
-        self.get_bin_paths_func(options)
-
-        success = self.check_config()
-        if success:
             if not self.check_pid_file():
                 print "An instance of cmd_queue is already running?"
                 # this should return success as cmd_archiver is
                 # running us every time
             else:
-                if self.daemon:
+                if self.options.daemon:
                     self.debuglog("going into background daemon mode...")
                     # set SIGHUP handler beforehand to avoid race
                     # condition after fork()
@@ -286,12 +264,16 @@ class CMDQueue(CMDWorker):
                         exit(0)
                     # the child process goes on
 
-                success = self.make_pid_file()
-                if success:
+                try:
+                    self.make_pid_file()
                     self.run()
-                    os.unlink(self.pid_file)
+                finally:
+                    self.remove_pid_file()
 
-        retval = (0 if success else 1)
+        except Exception, e:
+            self.log(e, "ERROR")
+            retval = 1
+
         self.debuglog("cmd_queue exiting with status %d" % retval)
         return retval
 

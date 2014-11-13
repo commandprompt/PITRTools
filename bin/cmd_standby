@@ -128,30 +128,32 @@ class CMDStandby(CMDWorker):
             else:
                 raise Exception("Couldn't find remote psql")
 
-    def get_bin_paths_func(self, options):
+    def locate_binaries(self):
         exes = ["pg_ctl"]
         if not self.use_streaming_replication:
             exes.append("pg_standby")
         else:
-            if options.recovertotime:
+            if self.options.recovertotime:
                 raise Exception('CONFIG: Unable to use recovery_target_time with streaming replication')
             exes.append("pg_archivecleanup")
 
-        super(CMDStandby, self).get_bin_paths_func(options, CMDWorker.COMMON_BIN_NAMES + exes)
+        super(CMDStandby, self).locate_binaries(CMDWorker.COMMON_BIN_NAMES + exes)
 
     # Let's make sure archive directory and config files can be reached
-    def check_config_func(self, options):
+    def check_config(self):
+        super(CMDStandby, self).check_config()
+
         if int(self.pgversion[0]) < 9:
             raise Exception('CONFIG: PITRTools only supports PostgreSQL versions 9.0+')
 
-        for element in (self.pg_conf, self.pg_hba_conf):
-            os.stat(element)  # raises OSError on fail
+        pathvars = [self.pg_conf, self.pg_hba_conf]
+        self.check_paths(pathvars)
 
         # make a new directory if archivedir doesn't exist.
         if not os.access(self.archivedir, os.R_OK | os.W_OK | os.X_OK):
             os.makedirs(self.archivedir, 0700)
 
-        if options.failover:
+        if self.options.failover:
             # check that the configuration files are all set.
             if not self.pg_conf_failover or not self.pg_hba_conf_failover:
                 raise Exception("CONFIG: failover is requested but pg_conf_failover and/or pg_hba_conf_failover are not set, exiting")
@@ -195,7 +197,7 @@ class CMDStandby(CMDWorker):
             self.pg_standby_flags += '-d '
         self.pg_standby_args = "%f %p %r "
 
-    def set_connect_and_copy_options(self, options):
+    def set_connect_and_copy_options(self):
         # Yes the odd counted " is needed because of the way we have to quote within the command
         # There may be a better way to do this, but I got tired of fighting.
         ssh_connect = """%s %s %s@%s """ % (self.ssh, self.ssh_flags, self.user, self.master_public_ip)
@@ -212,7 +214,7 @@ class CMDStandby(CMDWorker):
         if self.no_copy_conf:
             # we don't copy configuration files to the data directory, instead,
             # set command-line options to get them from their pristine locations
-            if not options.failover:
+            if not self.options.failover:
                 pg_conf = self.pg_conf
                 pg_hba_conf = self.pg_hba_conf
             else:
@@ -231,7 +233,7 @@ class CMDStandby(CMDWorker):
         if self.logfile:
             self.pgctl_base += ["-l",self.logfile]
 
-    def set_recovery_options(self, options):
+    def set_recovery_options(self):
         # set more sane value for trigger and recovery files now that we know
         # pgdata value:
         if self.trigger_file == "":
@@ -246,7 +248,7 @@ class CMDStandby(CMDWorker):
         # SR - include both primary_conninfo and restore_command w/o pg_standby.
         # failover - use only resore_command w/o pg_standby.
 
-        if self.use_streaming_replication and options.failover != '9999':
+        if self.use_streaming_replication and self.options.failover != '9999':
             restore_command = """'cp %s/%%f "%%p"' """ % (self.archivedir,)
             cleanup_string = """'%s %s %%r'""" % (self.pg_archivecleanup, self.archivedir)
             primary_conninfo_string = "host=%s port=%s user=%s sslmode=%s " % (self.master_public_ip, self.port, self.repl_db_user, self.sslmode)
@@ -256,20 +258,18 @@ class CMDStandby(CMDWorker):
             if len(self.repl_db_password) > 0:
                 primary_conninfo_string += "password=%s " % (self.repl_db_password,)
             self.recovery_string = """standby_mode = 'on'\nprimary_conninfo = '%s'\ntrigger_file = '%s'\nrestore_command = %s\narchive_cleanup_command = %s """ % (primary_conninfo_string, self.trigger_file, restore_command, cleanup_string)
-        elif options.failover == '999':
+        elif self.options.failover == '999':
             self.recovery_string = """restore_command = 'cp %s/%%f "%%p"' """ % (self.archivedir,)
-            if options.recovertotime:
-                self.recovery_string += """\nrecovery_target_time = '%s' """ % (options.recovertotime,)
+            if self.options.recovertotime:
+                self.recovery_string += """\nrecovery_target_time = '%s' """ % (self.options.recovertotime,)
         else:
             self.recovery_string = """restore_command = '%s %s %s %s' """ % (self.pg_standby, self.pg_standby_flags, self.archivedir, self.pg_standby_args)
 
-    def set_options(self, options):
-        """ Wrapper for varions set_ functions """
-        self.set_ssh_flags()
+    def set_options(self):
         self.set_rsync_options()
         self.set_pg_standby_options()
-        self.set_connect_and_copy_options(options)
-        self.set_recovery_options(options)
+        self.set_connect_and_copy_options()
+        self.set_recovery_options()
 
     # Check the master for being alive
     def ping_check_func(self):
@@ -565,12 +565,12 @@ class CMDStandby(CMDWorker):
             self.log("run_base_backup(): Base backup is unsuccessful and should be restarted", "ERROR")
         return result
 
-    def do_failover(self, options):
+    def do_failover(self):
         success = True
         try:
             check = self.check_pgpid_func()
             # Note: we already check that use_streaming_replication is not issued
-            # with recovertotime inside check_config_func.
+            # with recovertotime inside of check_config.
             if self.use_streaming_replication:
                 if check == 0:
                     # Postgres is running, just touch the trigger file and all should be good.
@@ -612,66 +612,62 @@ class CMDStandby(CMDWorker):
                 self.notify_external(ok=True, message="successful failover")
         return success
 
+    def main(self):
+        # before we do anything, let's just check you we are
+        if os.geteuid() == 0:
+            sys.exit("\nBad Mojo... no root access for this script\n")
+
+        retval = 0
+        try:
+            self.parse_commandline_arguments(argslist, CMDStandby.command_line_check_func)
+            self.load_configuration_file()
+
+            # Locate executables on master
+            self.get_remote_psql()
+            # Configure ssh command-line string, rsync options,
+            # pg_standy arguments and recovery options.
+            self.set_options()
+
+            success = True
+            # perform different actions depending on command-line switches
+            if self.options.dbinit:
+                success = self.dbinit_func()
+
+            elif self.options.base_backup:
+                success = self.run_base_backup()
+
+            elif self.options.failover == '999':
+                success = self.do_failover()
+
+            elif self.options.standby:
+                success = self.standby_func()
+
+            elif self.options.ping_check:
+                success = self.ping_check_func()
+
+            elif self.options.pgctl_action == 'start':
+                self.copy_conf()
+                success = self.start_postgresql_func()
+
+            elif self.options.pgctl_action == 'stop':
+                success = self.stop_postgresql_func()
+
+            elif self.options.pgctl_action == 'stop_basebackup':
+                success = self.stop_backup_func()
+
+            else:
+                print "Config OK"
+
+            if not success:
+                retval = 1
+        except Exception, e:
+            self.log(e, "ERROR")
+            retval = 2
+
+        self.debuglog("Standby exiting with status %d" % retval)
+        return retval
+
 if __name__ == '__main__':
-    # before we do anything, let's just check you we are
-    if os.geteuid() == 0:
-        sys.exit("\nBad Mojo... no root access for this script\n")
-
     standby = CMDStandby(classdict)
-    (options, args) = standby.parse_commandline_arguments(argslist, CMDStandby.command_line_check_func)
-
-    configfilename = options.configfilename
-    base_backup = options.base_backup
-    setstandby = options.standby
-    dbinit = options.dbinit
-    pgctl_action = options.pgctl_action
-    ping_check = options.ping_check
-    failover = options.failover
-    recovertotime = options.recovertotime
-
-    try:
-        cfg_vals = standby.load_configuration_file(configfilename)
-        # Locate executables
-        standby.get_bin_paths_func(options)
-        # Before we do anything, let's check the configuration
-        standby.check_config_func(options)
-        # Locate executables on master
-        standby.get_remote_psql()
-        # Configure ssh command-line string, rsync options,
-        # pg_standy arguments and recovery options.
-        standby.set_options(options)
-    except Exception, e:
-        standby.log(e, "ERROR")
-        sys.exit(2)
-
-    success = False
-    # perform different actions depending on command-line switches
-    if dbinit:
-        success = standby.dbinit_func()
-    elif base_backup:
-        success = standby.run_base_backup()
-        # If we want to failover to the latest good transaction
-    elif options.failover == '999':
-        success = standby.do_failover(options)
-        # If we want to enter standby mode
-    elif setstandby:
-        success = standby.standby_func()
-        # If we want to check if we can talk to the master
-    elif ping_check:
-        success = standby.ping_check_func()
-    # If we want to start or stop postgresql on the slave
-    elif pgctl_action == 'start':
-        standby.copy_conf()
-        success = standby.start_postgresql_func()
-    elif pgctl_action == 'stop':
-        success = standby.stop_postgresql_func()
-    elif pgctl_action == 'stop_basebackup':
-        success = standby.stop_backup_func()
-    else:
-        print "Config OK"
-        success = True
-
-    if success:
-        sys.exit(0)
-    else:
-        sys.exit(1)
+    retval = standby.main()
+    exit(retval)

@@ -23,25 +23,24 @@ class CMDWorker(object):
             os.path.join(os.getcwd(), os.path.dirname(__file__))
         )
 
-    @staticmethod
-    def parse_commandline_arguments(argslist, options_check_cb=None,
+    def parse_commandline_arguments(self, argslist, options_check_cb=None,
         usage="usage: %prog [options] arg1 arg2", version="%prog (pitrtools) 1.3\n\nCopyright Command Prompt, Inc.\n\nFor licensing information see the LICENSE file.\n"):
 
         parser = OptionParser(usage=usage,version=version)
 
         for arg in argslist:
             parser.add_option(arg[0], arg[1], **arg[2])
-        options, args = parser.parse_args()
-        if options_check_cb:
-            options_check_cb(parser, options)
-        return (options, args)
 
-    def load_configuration_file(self, configfilename, set_defaults_cb=None):
+        self.options, self.args = parser.parse_args()
+        if options_check_cb:
+            options_check_cb(parser, self.options)
+
+    def load_configuration_file(self, set_defaults_cb=None):
         result = dict()
         config = ConfigParser()
-        files = config.read(configfilename)
+        files = config.read(self.options.configfilename)
         if not files:
-            raise Exception('Configuration file %s is empty or not found' % (configfilename,))
+            raise Exception('Configuration file %s is empty or not found' % (self.options.configfilename,))
         for opt in self.classdict:
             key, typ, default = opt
             val = None
@@ -66,10 +65,30 @@ class CMDWorker(object):
             set_defaults_cb(result)
         self.__dict__.update(result)
 
+        self.check_config()
+        self.locate_binaries()
+
+    # checks config values and sets some common defaults
+    def check_config(self):
+        # set up our ssh transfer timeout and debug options
+        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (self.ssh_timeout,)
+        if self.ssh_debug:
+            self.ssh_flags += " -vvv"
+
+        if 'slaves' in self.__dict__:
+            self.slaves_list = self.slaves.strip("'").split(",")  # FIXME
+            if not any(self.slaves_list):
+                raise Exception("Refusing to run with empty or invalid slaves list.")
+
+    @staticmethod
+    def check_paths(pathvars):
+        for element in pathvars:
+            os.stat(element)
+
     COMMON_BIN_NAMES = ["rsync", "ssh"]
 
     #Get and set the required absolute paths for executables
-    def get_bin_paths_func(self, options, exes=COMMON_BIN_NAMES):
+    def locate_binaries(self, exes=COMMON_BIN_NAMES):
         found = []
         exe_paths = []
         final_paths = {}
@@ -182,43 +201,29 @@ class CMDWorker(object):
         except:
             return 1
 
-    # set up our ssh transfer timeout and debug options
-    def set_ssh_flags(self):
-        self.ssh_flags = "-o ConnectTimeout=%s -o StrictHostKeyChecking=no" % (self.ssh_timeout,)
-        if self.ssh_debug:
-            self.ssh_flags += " -vvv"
-
 
 if __name__ == '__main__':
-    argslist = (('-F', '--file', dict(dest="archivefilename",
-                action="store", help="Archive file", metavar="FILE")),
-               ("-C", "--config", dict(dest="configfilename",
-                action="store",  help="the name of the archiver config file",
-                metavar="FILE", default='cmd_archiver.ini')),
-               ("-f", "--flush", dict(dest="flush", action="store_true",
-                help="Flush all remaining archives to slave")),
-               ("-I", "--init", dict(dest="init", action="store_true",
-                help="Initialize master environment")))
+    argslist = [("-C", "--config",
+                 dict(dest="configfilename",
+                      action="store",
+                      help="the name of the archiver config file",
+                      metavar="FILE"))]
 
-    classdict = (('state', 's', None),
-                ('rsync_flags', 's', ""),
-                ('slaves', 's', None),
+    # test common config parameters
+    classdict = (('rsync_flags', 's', ""),
                 ('user', 's', None),
-                ('r_archivedir', 's', None),
-                ('l_archivedir', 's', None),
-                ('timeout', 'i', None),
+                ('ssh_timeout', 'i', None),
                 ('notify_ok', 's', None),
                 ('notify_warning', 's', None),
                 ('notify_critical', 's', None),
                 ('debug', 'b', False),
                 ('pgdata', 's', None),
                 ('pgcontroldata', 's', ""),
-                ('rsync_version', 'i', None),
                 ('includepath', 's', None),
                 ('ssh_debug', 'b', False))
 
     worker = CMDWorker(classdict)
-    (options, args) = worker.parse_commandline_arguments(argslist)
-    worker.load_configuration_file(options.configfilename)
-    worker.get_bin_paths_func(options)
+    worker.parse_commandline_arguments(argslist)
+    if worker.options.configfilename:
+        worker.load_configuration_file()
     print worker.__dict__
