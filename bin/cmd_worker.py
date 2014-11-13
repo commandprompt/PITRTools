@@ -76,7 +76,7 @@ class CMDWorker(object):
             self.ssh_flags += " -vvv"
 
         if 'slaves' in self.__dict__:
-            self.slaves_list = self.slaves.strip("'").split(",")  # FIXME
+            self.slaves_list = self.slaves.replace(" ", "").split(",")
             if not any(self.slaves_list):
                 raise Exception("Refusing to run with empty or invalid slaves list.")
 
