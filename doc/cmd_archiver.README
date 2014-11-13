@@ -170,7 +170,7 @@ cmd_archiver.ini options:
 	This is the IP address of the standby server. A hostname/FQDN would work
 	as well. It must be a comma separated list for multiple slaves.
 
- user: postgres					
+ user: postgres
 
 	The UNIX shell user that is using rsync. This is the user that must have
 	SSH keys configured between the master and standby.
@@ -179,6 +179,22 @@ cmd_archiver.ini options:
 
 	The SSH timeout. If it takes > timeout to begin the transfer, the archiver
 	will provide a nonzero return and alert per notify_critical.
+
+ queue_user: postgres
+
+	The name of a Unix user that will be running cmd_archiver or
+	cmd_queue.  The cmd_queue script will refuse to start if run
+	by a different user.
+
+ queue_wait: 5
+
+	Number of seconds the cmd_queue process will sleep between
+	tries to ship the accumulated WAL files to the slaves.
+
+ max_queue_workers: 1
+
+	The maximum allowed number of WAL-shipping rsync processes
+	that cmd_queue will run in parallel.
 
  notify_ok: echo OK
 

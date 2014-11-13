@@ -1,0 +1,64 @@
+ 
+ pitrtools
+ @ COPYRIGHT Command Prompt, Inc.
+ Nov 13, 2014
+
+
+ cmd_queue script is used by cmd_archiver internally, but can be run
+ manually by the user if needed.
+
+
+Usage:
+
+ cmd_queue [options]
+
+ Options:
+   -h, --help              Show this help message and exit
+   -C FILE, --config=FILE  The name of the archiver config file
+   -d, --daemon            Enter background daemon mode
+
+
+The cmd_queue script uses the same config file as cmd_archiver (see
+cmd_archiver.README for configuation details.)
+
+This job of this script is to run indefinitely monitoring the
+l_archivedir for newly arriving WAL files and make sure they are
+shipped to the slave hosts.
+
+The cmd_archiver will put a copy of every new WAL file in l_archivedir
+then call cmd_queue to fulfill shipping to the slaves.  The cmd_queue
+checks for its PID file, cmd_queue.pid under l_archivedir, to avoid
+running multiple instances and will bail out if it detects another
+intstance already running.  Running cmd_queue for every archived file
+makes sure that it's restarted even after crash/failure or when killed
+by user.  On the other hand, the user-started cmd_queue will be
+"reused" by cmd_archiver, i.e. no concurrent cmd_queue process will be
+running, because of the PID file check.
+
+When cmd_queue detects a new file under l_archivedir it will try to
+make a hard link to the file in every slave directory, then remove the
+original link (but only if the links to all slaves were made
+successfully).  Later, when the file is shipped to the last slave
+host, the last reference will be removed and the disk space is
+reclaimed.
+
+If you have a number of slave hosts to ship WAL files to and enough
+bandwith and CPU power, you might want to set max_queue_workers to
+something higher than the default 1.  This will tell cmd_queue to run
+up to that much rsync processes to individual slave hosts in parallel.
+Setting this configuration parameter to a value higher than the total
+number of slaves is not useful, however.
+
+After every round of attempts to ship the pending WAL files to the
+slaves, the cmd_queue process will sleep for the number of seconds
+specified in queue_wait configuration parameter.  Tuning this
+parameter might help when establishing ssh connection by rsync to the
+slave host has a relatively high latency.  With higher value more WAL
+files will be accumulated locally to be later shipped in one go.
+
+Finally, cmd_queue will check if the master server's postmaster is
+still running by checking $PGDATA/postmaster.pid file.  If it is no
+longer alive, cmd_queue will break from infinite loop and exit with
+success error level.  However, if you run cmd_queue manually with
+stopped postmaster, it will attempt to ship any pending WAL files to
+the slave hosts.
