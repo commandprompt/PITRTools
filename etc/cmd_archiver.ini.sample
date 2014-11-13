@@ -4,7 +4,7 @@
 state: online
 
 ; The base database directory
-pgdata: /var/lib/postgresql/8.4/main
+pgdata: /var/lib/postgresql/9.2/main
 
 ; where to remotely copy archives
 r_archivedir: /var/lib/postgresql/archive

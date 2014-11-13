@@ -143,8 +143,8 @@ class CMDStandby(CMDWorker):
     def check_config(self):
         super(CMDStandby, self).check_config()
 
-        if int(self.pgversion[0]) < 9:
-            raise Exception('CONFIG: PITRTools only supports PostgreSQL versions 9.0+')
+        if float(self.pgversion) < 9.2:
+            raise Exception('CONFIG: PITRTools only supports PostgreSQL versions 9.2+')
 
         pathvars = [self.pg_conf, self.pg_hba_conf]
         self.check_paths(pathvars)

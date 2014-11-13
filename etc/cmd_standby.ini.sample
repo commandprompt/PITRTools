@@ -1,7 +1,7 @@
 [DEFAULT]
 
 ; what major version are we using?
-pgversion: 9.0
+pgversion: 9.2
 
 ; Whether or not to use streaming replication.  If this is set to "on"
 ; pitrtools will configure the standby server to replicate from master
@@ -56,7 +56,7 @@ rsync_threads: 2
 archivedir: /var/lib/postgresql/archive
 
 ; where you executed initdb -D to
-pgdata: /var/lib/postgresql/9.0/main
+pgdata: /var/lib/postgresql/9.2/main
 
 ; Confs
 
@@ -81,7 +81,7 @@ pg_hba_conf: /var/lib/postgresql/pitrtools/etc/pg_conf/pg_hba.conf
 
 ; The recovery.conf file to create when starting up
 ; Defaults to %(pgdata)/recovery.conf
-recovery_conf: /var/lib/postgresql/8.4/main/recovery.conf
+recovery_conf: /var/lib/postgresql/9.2/main/recovery.conf
 
 ; Useful when postgresql.conf doesn't specify log destination
 ; Will be passed with -l to pg_ctl when starting the server.

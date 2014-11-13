@@ -77,9 +77,9 @@ Configuration:
 
  [DEFAULT]
 
- pgversion: 9.0
+ pgversion: 9.2
 
-	What version of PostgreSQL are we running? NOTE: Versions below 9.0 are not compatible.
+	What version of PostgreSQL are we running? NOTE: Versions below 9.2 are not compatible.
 
  use_streaming_replication: off
 
@@ -157,7 +157,7 @@ Configuration:
 
 	This is where cmd_archiver is copying files from the master to the standby.
 
- pgdata: /var/lib/postgresql/9.0/main
+ pgdata: /var/lib/postgresql/9.2/main
 
 	The absolute path to your cluster directory.
 
@@ -185,7 +185,7 @@ Configuration:
 	to on to make postgres actually use the above conf files without
 	copying them to pgdata.
 
- recovery_conf: /var/lib/postgresql/9.0/main/recovery.conf
+ recovery_conf: /var/lib/postgresql/9.2/main/recovery.conf
 
 	The absolute path to the recovery.conf to create when we failover.
 	This defaults to %(pgdata)/recovery.conf
