@@ -22,7 +22,6 @@ Usage:
    -F FILE, --file=FILE    Archive file
    -C FILE, --config=FILE
                            The name of the archiver config file
-   -f, --flush             Flush all remaining archives to slave
    -I, --init              Initialize master environment
 
 
@@ -107,16 +106,6 @@ Notes on configuration:
 
 
 More about options:
-
- -f/--flush is used at the command line only.
-
-  You use flush before passing -F999 to cmd_standby. This is done
-  to make sure that all logs that master server has written are
-  available to the standby server before a failover.
-
-  Note, that the use of --flush is a one way trip. Once used, you must
-  bring your standby into production or you will have to issue a new base
-  backup.
 
  --init
 
