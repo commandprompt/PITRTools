@@ -1,10 +1,11 @@
 
  pitrtools
- @ COPYRIGHT Command Prompt, Inc.
+ © COPYRIGHT Command Prompt, Inc.
  May 5, 2013
 
  The cmd_standby script is a utility that allows easy management of all types of 
- standby PostgreSQL servers, from cold to warm and streaming repliaction.
+ standby PostgreSQL servers, from cold to warm and streaming replication. It is
+ run on the standby host.
  
  It currently has the following capabilities:
 
@@ -25,13 +26,13 @@ Usage:
    -h, --help           show this help message and exit
    -A start|stop, --action=start|stop
                         Start or Stop PostgreSQL
-   -B, --basebackup     Start/Stop a base backup
+   -B, --basebackup     Start/Stop a base backup. Run with -I before this.
    -C FILE, --config=FILE
                         the name of the standby config file
    -F VALUE, --failover=VALUE
                         Value is a 3 digit number 999
 
-   -I, --dbinit         Use before -B
+   -I, --dbinit         Create local filesystem directories like on the master.
    -P, --ping           Is my master alive?
    -R TIMESTAMP, --recovertotime=TIMESTAMP
                         If you need to restore to a specific point in time
