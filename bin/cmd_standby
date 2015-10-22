@@ -378,7 +378,7 @@ class CMDStandby(CMDWorker):
 
     # Simple function to help ensure we have all paths created for postgresql
     def dbinit_func(self):
-        check = standby.check_pgpid_func()
+        check = self.check_pgpid_func()
         if check == 0:
             self.log("dbinit_func(): Can not execute --dbinit with PG running locally", "ERROR")
             return False
@@ -398,7 +398,7 @@ class CMDStandby(CMDWorker):
         except Exception, e:
             self.log("dbinit_func(): %s " % e, "ERROR")
         else:
-            self.log("dbinit_func(): Standby is ready")
+            self.log("dbinit_func(): Standby filesystem is ready")
             return True
         self.log("dbinit_func(): failed", "ERROR")
         return False
@@ -449,7 +449,7 @@ class CMDStandby(CMDWorker):
         # check whether PostgreSQL has already started. Sleep to give it time to write
         # the pid file.
         sleep(2)
-        check = standby.check_pgpid_func()
+        check = self.check_pgpid_func()
         if check != 0:
             self.log("start_postgresql_func(): PostgreSQL refused to start", "ERROR")
             return False
@@ -504,7 +504,7 @@ class CMDStandby(CMDWorker):
     # and start postgresql
     def standby_func(self):
         result = False
-        check = standby.check_pgpid_func()
+        check = self.check_pgpid_func()
         if check == 0:
             self.log("standby_func(): Can not enter standby mode if PG is already running", "ERROR")
             return False
